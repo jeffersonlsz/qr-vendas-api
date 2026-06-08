@@ -1,0 +1,15 @@
+# FastAPI and Server
+fastapi==0.109.2
+uvicorn[standard]==0.27.1
+python-multipart==0.0.9
+
+# Pydantic and Settings
+pydantic==2.6.1
+pydantic-settings==2.1.0
+
+# Google Cloud / Firebase
+google-cloud-firestore==2.14.0
+firebase-admin==6.4.0
+
+
+

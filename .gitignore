@@ -1,0 +1,208 @@
+# Git Ignore File
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+
+# Secrets
+*.pem
+*.key
+*-credentials.json
+service-account.json
+firebase-adminsdk-*.json
+
+# Logs
+*.log
+logs/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Type checking
+.mypy_cache/
+.pytype/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+*.db
+*.sqlite
+*.sqlite3
+
+# =========================
+
+# Python
+
+# =========================
+
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual env
+
+venv/
+.env/
+.venv/
+
+# Environment files
+
+.env
+.env.local
+.env.*.local
+
+# =========================
+
+# Testing / Coverage
+
+# =========================
+
+.pytest_cache/
+.coverage
+htmlcov/
+
+# =========================
+
+# Type checking / lint
+
+# =========================
+
+.mypy_cache/
+.ruff_cache/
+
+# =========================
+
+# IDE / Editor
+
+# =========================
+
+.vscode/
+.idea/
+
+# =========================
+
+# OS
+
+# =========================
+
+.DS_Store
+Thumbs.db
+
+# =========================
+
+# Logs
+
+# =========================
+
+*.log
+firebase-debug.log
+firestore-debug.log
+
+# =========================
+
+# Firebase exports
+
+# =========================
+
+firebase-export-*/
+data/firestore_export/
+data/firebase-export-metadata.json
+
+# =========================
+
+# Docker
+
+# =========================
+
+docker-data/
+
+# =========================
+
+# Node
+
+# =========================
+
+node_modules/
+
+# =========================
+
+# Build
+
+# =========================
+
+dist/
+build/
+
+# =========================
+
+# Qwen / AI tools
+
+# =========================
+
+.qwen/
+
+# =========================
+
+# Secrets / Credentials
+
+# =========================
+
+*.pem
+*.key
+service-account.json
+firebase-service-account.json
+
+# =========================
+
+# Misc
+
+# =========================
+
+*.sqlite3
+*.db
