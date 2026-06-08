@@ -206,3 +206,5 @@ firebase-service-account.json
 
 *.sqlite3
 *.db
+
+firebase-service-account.json

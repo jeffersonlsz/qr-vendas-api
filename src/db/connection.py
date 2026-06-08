@@ -12,6 +12,10 @@ from google.cloud import firestore  # type: ignore[import]
 
 from src.core.config import Settings
 
+import json
+from google.oauth2 import service_account
+
+
 logger = logging.getLogger(__name__)
 
 # Global client instance
@@ -51,11 +55,34 @@ def initialize_firestore(settings: Settings) -> firestore.Client:
                 _firestore_client = firestore.Client.from_service_account_json(
                     settings.firestore_credentials_path
                 )
+                            
             else:
-                logger.info("Connecting to Firestore using default credentials")
-                _firestore_client = firestore.Client(
-                    project=settings.firestore_project_id
-                )
+                credentials_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+
+                if credentials_json:
+                    logger.info(
+                        "Connecting to Firestore using credentials JSON from environment"
+                    )
+
+                    credentials_info = json.loads(credentials_json)
+
+                    credentials = service_account.Credentials.from_service_account_info(
+                        credentials_info
+                    )
+
+                    _firestore_client = firestore.Client(
+                        project=credentials_info["project_id"],
+                        credentials=credentials,
+                    )
+
+                else:
+                    logger.info("Connecting to Firestore using default credentials")
+
+                    _firestore_client = firestore.Client(
+                        project=settings.firestore_project_id
+                    )
+                
+
 
         # Test connection (skip in development to allow offline startup)
         if not settings.is_development:
