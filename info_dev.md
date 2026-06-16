@@ -31,8 +31,27 @@ Em um novo terminal, com o ambiente virtual ativado:
 # Rodar servidor de desenvolvimento
 python -m uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
 ```
+### 3. Rodar com docker
+# Build e push da imagem
+docker build -t gcr.io/qr-saude-alpha/sist-vendas-uber -f Dockerfile .
+docker push gcr.io/qr-saude-alpha/sist-vendas-uber
+# Localmente
+docker run -p 8000:8000 gcr.io/qr-saude-alpha/sist-vendas-uber
+# Cloud Run
+gcloud run deploy sist-vendas-uber \
+    --image gcr.io/qr-saude-alpha/sist-vendas-uber \
+    --region us-central1 \
+    --allow-unauthenticated
 
-### 4. Variáveis de Ambiente (.env)
+
+# Deploy
+gcloud run deploy sist-vendas-uber \
+    --image gcr.io/PROJECT_ID/sist-vendas-uber \
+    --region us-central1 \
+    --allow-unauthenticated
+
+
+### 5. Variáveis de Ambiente (.env)
 Certifique-se de que seu arquivo `.env` aponta para o emulador durante o desenvolvimento:
 ```env
 FIRESTORE_EMULATOR_HOST="localhost:8080"

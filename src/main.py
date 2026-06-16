@@ -21,6 +21,7 @@ from src.api.routers import (
     parceiros_router,
     vendas_router,
     dashboard_router,
+    cotacoes_router,
 )
 
 # Initialize settings and logging
@@ -84,6 +85,7 @@ def create_app() -> FastAPI:
     app.include_router(parceiros_router, prefix=settings.api_prefix)
     app.include_router(vendas_router, prefix=settings.api_prefix)
     app.include_router(dashboard_router, prefix=settings.api_prefix)
+    app.include_router(cotacoes_router, prefix=settings.api_prefix)
 
     # Register exception handlers
     register_exception_handlers(app)
