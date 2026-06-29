@@ -27,7 +27,11 @@ class Settings(BaseSettings):
 
     # API
     api_prefix: str = "/api/v1"
-    cors_origins: list[str] = ["http://localhost:5173"]
+    cors_origins: list[str] = [
+        "http://localhost:5173",
+        "https://qr-saude-alpha.web.app",
+        "https://qr-saude-alpha.firebaseapp.com",
+        ]
     allowed_hosts: list[str] = ["http://localhost:5173"]
 
     # Firestore
