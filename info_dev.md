@@ -33,22 +33,11 @@ python -m uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
 ```
 ### 3. Rodar com docker
 # Build e push da imagem
-docker build -t gcr.io/qr-saude-alpha/sist-vendas-uber -f Dockerfile .
-docker push gcr.io/qr-saude-alpha/sist-vendas-uber
-# Localmente
-docker run -p 8000:8000 gcr.io/qr-saude-alpha/sist-vendas-uber
+docker build -t sist-vendas-uber -f Dockerfile .  
+docker run -p 8080:8080 sist-vendas-uber 
+
 # Cloud Run
-gcloud run deploy sist-vendas-uber \
-    --image gcr.io/qr-saude-alpha/sist-vendas-uber \
-    --region us-central1 \
-    --allow-unauthenticated
-
-
-# Deploy
-gcloud run deploy sist-vendas-uber \
-    --image gcr.io/PROJECT_ID/sist-vendas-uber \
-    --region us-central1 \
-    --allow-unauthenticated
+# TODO verificar como fazer deploy no render e no gcloud (quando tiver o projeto)
 
 
 ### 5. Variáveis de Ambiente (.env)
@@ -56,3 +45,8 @@ Certifique-se de que seu arquivo `.env` aponta para o emulador durante o desenvo
 ```env
 FIRESTORE_EMULATOR_HOST="localhost:8080"
 GOOGLE_CLOUD_PROJECT="demo-project"
+```
+### 6. Deploy no Render
+
+# 
+
