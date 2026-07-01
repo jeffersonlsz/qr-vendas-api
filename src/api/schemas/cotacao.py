@@ -1,3 +1,4 @@
+# src\api\schemas\cotacao.py
 from pydantic import BaseModel
 from typing import List
 

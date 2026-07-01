@@ -1,3 +1,4 @@
+# src\api\routers\cotacoes.py
 from fastapi import APIRouter
 from src.api.schemas.cotacao import CotacaoRequest, CotacaoResponse
 

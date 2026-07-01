@@ -1,3 +1,4 @@
+# src\db\repositories.py
 """
 Base repository for Firestore operations.
 Provides common CRUD operations for all repositories.
