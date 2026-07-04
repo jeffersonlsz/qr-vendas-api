@@ -20,7 +20,7 @@ class VendaStatus(str, Enum):
 class VendaBase(BaseModel):
     """Base schema for Venda with common fields."""
 
-    lead_id: str = Field(..., description="Lead ID associated with this sale")
+    solicitacao_id: str = Field(..., description="ID da Solicitação associada a esta venda")
     valor_venda: float = Field(..., gt=0, description="Sale value")
     descricao: Optional[str] = Field(None, max_length=500, description="Sale description")
 
@@ -45,7 +45,7 @@ class VendaResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
-    lead_id: str
+    solicitacao_id: str
     parceiro_id: str
     valor_venda: float
     percentual_comissao: float
@@ -86,7 +86,7 @@ class VendaListResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
-    lead_id: str
+    solicitacao_id: str
     parceiro_id: str
     valor_venda: float
     percentual_comissao: float
@@ -117,6 +117,6 @@ class VendaComResumo(BaseModel):
     """Schema for sale with lead and partner summary."""
 
     venda: VendaResponse
-    lead_nome: str
-    lead_telefone: str
+    solicitacao_protocolo: str
+    solicitacao_cidade: Optional[str] = None
     parceiro_nome: str

@@ -5,7 +5,7 @@ Handles business logic for sale operations.
 
 import logging
 from typing import Any, Dict, List, Optional
-
+from src.api.schemas.solicitacao import StatusSolicitacao
 from google.cloud import firestore
 
 from src.api.schemas.venda import VendaCreate, VendaStatus, VendaUpdate
@@ -43,9 +43,9 @@ class VendaService(BaseService):
         Returns:
             Created sale data
         """
-        # Validate lead exists and get partner info
-        lead = await self._validate_lead(data.lead_id)
-        parceiro = await self._get_parceiro(lead["parceiro_id"])
+        # Validate solicitation exists and get partner info
+        solicitacao = await self._validate_solicitacao(data.solicitacao_id)
+        parceiro = await self._get_parceiro(solicitacao["parceiro_id"])
 
         # Calculate commission
         percentual_comissao = parceiro.get("percentual_comissao", 0.1)
@@ -55,8 +55,8 @@ class VendaService(BaseService):
 
         venda_data = {
             "id": venda_id,
-            "lead_id": data.lead_id,
-            "parceiro_id": lead["parceiro_id"],
+            "solicitacao_id": data.solicitacao_id,
+            "parceiro_id": solicitacao["parceiro_id"],
             "valor_venda": data.valor_venda,
             "percentual_comissao": percentual_comissao,
             "comissao": comissao,
@@ -75,10 +75,10 @@ class VendaService(BaseService):
         if not doc.exists:
             raise Exception(f"Failed to create sale: {venda_id}")
 
-        # Update lead status to converted
-        await self._update_lead_status(data.lead_id)
+        # Update solicitation status to converted
+        await self._update_solicitacao_status(data.solicitacao_id, StatusSolicitacao.CONVERTIDA)
 
-        logger.info(f"Created sale: {venda_id} for lead: {data.lead_id}")
+        logger.info(f"Created sale: {venda_id} for solicitation: {data.solicitacao_id}")
         return self._serialize_doc(doc)
 
     async def get_by_id(self, venda_id: str) -> Optional[Dict[str, Any]]:
@@ -172,7 +172,7 @@ class VendaService(BaseService):
     async def list(
         self,
         parceiro_id: Optional[str] = None,
-        lead_id: Optional[str] = None,
+        solicitacao_id: Optional[str] = None,
         status: Optional[VendaStatus] = None,
         order_by: str = "created_at",
         descending: bool = True,
@@ -184,7 +184,7 @@ class VendaService(BaseService):
 
         Args:
             parceiro_id: Filter by partner ID
-            lead_id: Filter by lead ID
+            solicitacao_id: Filter by solicitation ID
             status: Filter by status
             order_by: Field to order by
             descending: Order direction
@@ -199,8 +199,8 @@ class VendaService(BaseService):
         if parceiro_id:
             query = query.where("parceiro_id", "==", parceiro_id)
 
-        if lead_id:
-            query = query.where("lead_id", "==", lead_id)
+        if solicitacao_id:
+            query = query.where("solicitacao_id", "==", solicitacao_id)
 
         if status:
             status_value = status.value if hasattr(status, "value") else status
@@ -263,17 +263,17 @@ class VendaService(BaseService):
         """
         return await self.list(parceiro_id=parceiro_id, limit=limit)
 
-    async def get_by_lead(self, lead_id: str) -> List[Dict[str, Any]]:
+    async def get_by_solicitacao(self, solicitacao_id: str) -> List[Dict[str, Any]]:
         """
-        Get all sales for a lead.
+        Get all sales for a solicitation.
 
         Args:
-            lead_id: Lead ID
+            solicitacao_id: Solicitation ID
 
         Returns:
             List of sales
         """
-        return await self.list(lead_id=lead_id)
+        return await self.list(solicitacao_id=solicitacao_id)
 
     async def mark_as_paid(self, venda_id: str) -> Dict[str, Any]:
         """
@@ -308,23 +308,23 @@ class VendaService(BaseService):
         vendas = await self.list(parceiro_id=parceiro_id, status=status, limit=1000)
         return sum(v.get("comissao", 0) for v in vendas)
 
-    async def _validate_lead(self, lead_id: str) -> Dict[str, Any]:
+    async def _validate_solicitacao(self, solicitacao_id: str) -> Dict[str, Any]:
         """
-        Validate lead exists.
+        Validate solicitation exists.
 
         Args:
-            lead_id: Lead ID
+            solicitacao_id: Solicitation ID
 
         Returns:
-            Lead data
+            Solicitation data
 
         Raises:
-            NotFoundException: If lead doesn't exist
+            NotFoundException: If solicitation doesn't exist
         """
-        from src.services.leads import LeadService
+        from src.db.repositories import SolicitacaoRepository
 
-        lead_service = LeadService(self.db)
-        return await lead_service.get_by_id_or_raise(lead_id)
+        solicitacao_repo = SolicitacaoRepository(self.db)
+        return await solicitacao_repo.get_or_raise(solicitacao_id)
 
     async def _get_parceiro(self, parceiro_id: str) -> Dict[str, Any]:
         """
@@ -344,14 +344,15 @@ class VendaService(BaseService):
         parceiro_service = ParceiroService(self.db)
         return await parceiro_service.get_by_id_or_raise(parceiro_id)
 
-    async def _update_lead_status(self, lead_id: str) -> None:
+    async def _update_solicitacao_status(self, solicitacao_id: str, status: StatusSolicitacao) -> None:
         """
-        Update lead status to converted when a sale is created.
+        Update solicitation status.
 
         Args:
-            lead_id: Lead ID
+            solicitacao_id: Solicitation ID
+            status: New status
         """
-        from src.services.leads import LeadService, LeadStatus
+        from src.db.repositories import SolicitacaoRepository
 
-        lead_service = LeadService(self.db)
-        await lead_service.update_status(lead_id, LeadStatus.CONVERTIDO)
+        solicitacao_repo = SolicitacaoRepository(self.db)
+        await solicitacao_repo.update(solicitacao_id, {"status": status.value, "updated_at": get_server_timestamp()})

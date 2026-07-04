@@ -26,9 +26,8 @@ class NotFoundException(AppException):
 
     def __init__(self, resource: str, identifier: Optional[str] = None):
         message = f"{resource} not found"
-        if identifier:
-            message += f": {identifier}"
-        super().__init__(message=message, status_code=404)
+        detail = f"{resource} with ID {identifier} not found" if identifier else message
+        super().__init__(message=message, status_code=404, detail=detail)
 
 
 class ConflictException(AppException):

@@ -1,3 +1,4 @@
+# src\api\routers\parceiros.py
 """
 Parceiros (Partners) API Router.
 Handles all partner-related endpoints.
@@ -16,6 +17,7 @@ from src.api.schemas.parceiro import (
     ParceiroResumo,
     ParceiroUpdate,
 )
+from src.api.schemas.solicitacao import SolicitacaoListResponse
 from src.db.connection import get_db
 from src.services.parceiros import ParceiroService
 
@@ -27,6 +29,25 @@ router = APIRouter(prefix="/parceiros", tags=["Parceiros"])
 def get_parceiro_service(db=Depends(get_db)) -> ParceiroService:
     """Dependency injection for ParceiroService."""
     return ParceiroService(db)
+
+
+@router.get(
+    "/{parceiro_id}/solicitacoes",
+    response_model=SolicitacaoListResponse,
+    summary="Get solicitations by partner",
+    description="Get all solicitations for a specific partner.",
+)
+async def get_solicitacoes_by_parceiro(
+    parceiro_id: str,
+    service: ParceiroService = Depends(get_parceiro_service),
+):
+    """
+    Get all solicitations for a specific partner.
+
+    - **parceiro_id**: The partner's unique identifier
+    """
+    solicitacoes = await service.get_solicitacoes_by_parceiro(parceiro_id)
+    return SolicitacaoListResponse(solicitacoes=solicitacoes)
 
 
 @router.post(

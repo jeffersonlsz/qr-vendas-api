@@ -15,8 +15,8 @@ from src.api.schemas.dashboard import (
     MetricasParceiro,
     PeriodoMetricas,
 )
-from src.api.schemas.lead import LeadStatus
 from src.api.schemas.venda import VendaStatus
+from src.api.schemas.solicitacao import StatusSolicitacao
 from src.core.exceptions import NotFoundException
 
 logger = logging.getLogger(__name__)
@@ -66,13 +66,13 @@ class DashboardService:
             limit=5,
         )
 
-        # Get recent leads
-        from src.services.leads import LeadService
+        # Get recent solicitations
+        from src.db.repositories import SolicitacaoRepository
 
-        lead_service = LeadService(self.db)
-        leads_recentes = await lead_service.list(
-            parceiro_id=parceiro_id,
-            limit=5,
+        solicitacao_repo = SolicitacaoRepository(self.db)
+        solicitacoes_recentes = await solicitacao_repo.list(
+            filters={"parceiro_id": parceiro_id},
+            limit=5, order_by="created_at", descending=True
         )
 
         return DashboardResumo(
@@ -89,14 +89,14 @@ class DashboardService:
                 }
                 for v in vendas_recentes
             ],
-            ultimos_leads=[
+            ultimas_solicitacoes=[
                 {
-                    "id": l["id"],
-                    "nome": l["nome"],
-                    "status": l["status"],
-                    "created_at": l["created_at"],
+                    "id": s["id"],
+                    "protocolo": s["protocolo"],
+                    "status": s["status"],
+                    "created_at": s["created_at"],
                 }
-                for l in leads_recentes
+                for s in solicitacoes_recentes
             ],
         )
 
@@ -108,30 +108,31 @@ class DashboardService:
             General dashboard with aggregated metrics
         """
         from src.services.parceiros import ParceiroService
-        from src.services.leads import LeadService
+        from src.db.repositories import SolicitacaoRepository
         from src.services.vendas import VendaService
 
         parceiro_service = ParceiroService(self.db)
-        lead_service = LeadService(self.db)
+        solicitacao_repo = SolicitacaoRepository(self.db)
         venda_service = VendaService(self.db)
 
         # Count partners
         total_parceiros = await parceiro_service.count()
         parceiros_ativos = await parceiro_service.count(ativo=True)
 
-        # Count leads
-        total_leads = await lead_service.count()
-        leads_convertidos = await lead_service.count(status=LeadStatus.CONVERTIDO)
+        # Count solicitations
+        total_solicitacoes = await solicitacao_repo.count()
+        solicitacoes_convertidas = await solicitacao_repo.count(filters={"status": StatusSolicitacao.CONVERTIDA.value})
 
         # Count sales
         total_vendas = await venda_service.count()
-        valor_total_vendas = await venda_service.get_total_comissoes()
-
+        todas_vendas = await venda_service.list(limit=5000) # Use a reasonable limit
+        valor_total_vendas = sum(v.get("valor_venda", 0) for v in todas_vendas)
+        
         # Calculate total commissions
         total_comissoes = await venda_service.get_total_comissoes()
 
         # Calculate conversion rate
-        taxa_conversao = (leads_convertidos / total_leads) if total_leads > 0 else 0.0
+        taxa_conversao = (solicitacoes_convertidas / total_solicitacoes) if total_solicitacoes > 0 else 0.0
 
         # Get top partners
         top_parceiros = await self._get_top_parceiros(limit=5)
@@ -139,7 +140,7 @@ class DashboardService:
         return DashboardGeral(
             total_parceiros=total_parceiros,
             parceiros_ativos=parceiros_ativos,
-            total_leads=total_leads,
+            total_solicitacoes=total_solicitacoes,
             total_vendas=total_vendas,
             valor_total_vendas=valor_total_vendas,
             total_comissoes=total_comissoes,
@@ -164,23 +165,23 @@ class DashboardService:
         Returns:
             Metrics for the period
         """
-        from src.services.leads import LeadService
+        from src.db.repositories import SolicitacaoRepository
         from src.services.vendas import VendaService
 
-        lead_service = LeadService(self.db)
+        solicitacao_repo = SolicitacaoRepository(self.db)
         venda_service = VendaService(self.db)
 
-        # Get leads in period
-        leads = await lead_service.list(
-            parceiro_id=parceiro_id,
+        # Get solicitations in period
+        solicitacoes = await solicitacao_repo.list(
+            filters={"parceiro_id": parceiro_id} if parceiro_id else None,
             limit=1000,
         )
 
         # Filter by date range (client-side filtering for simplicity)
-        leads_no_periodo = [
-            l
-            for l in leads
-            if self._is_in_period(l.get("created_at"), data_inicio, data_fim)
+        solicitacoes_no_periodo = [
+            s
+            for s in solicitacoes
+            if self._is_in_period(s.get("created_at"), data_inicio, data_fim)
         ]
 
         # Get sales in period
@@ -195,7 +196,7 @@ class DashboardService:
             if self._is_in_period(v.get("created_at"), data_inicio, data_fim)
         ]
 
-        total_leads = len(leads_no_periodo)
+        total_solicitacoes = len(solicitacoes_no_periodo)
         total_vendas = len(vendas_no_periodo)
         valor_total_vendas = sum(v.get("valor_venda", 0) for v in vendas_no_periodo)
         total_comissao = sum(v.get("comissao", 0) for v in vendas_no_periodo)
@@ -203,7 +204,7 @@ class DashboardService:
         return PeriodoMetricas(
             data_inicio=data_inicio,
             data_fim=data_fim,
-            total_leads=total_leads,
+            total_solicitacoes=total_solicitacoes,
             total_vendas=total_vendas,
             valor_total_vendas=valor_total_vendas,
             total_comissao=total_comissao,
@@ -222,29 +223,26 @@ class DashboardService:
         Returns:
             Partner metrics
         """
-        from src.services.leads import LeadService
+        from src.db.repositories import SolicitacaoRepository
         from src.services.vendas import VendaService
 
-        lead_service = LeadService(self.db)
+        solicitacao_repo = SolicitacaoRepository(self.db)
         venda_service = VendaService(self.db)
 
-        # Lead counts by status
-        total_leads = await lead_service.count(parceiro_id=parceiro_id)
-        leads_novos = await lead_service.count(
-            parceiro_id=parceiro_id,
-            status=LeadStatus.NOVO,
+        # Solicitation counts by status
+        filters = {"parceiro_id": parceiro_id}
+        total_solicitacoes = await solicitacao_repo.count(filters=filters)
+        solicitacoes_novas = await solicitacao_repo.count(
+            filters={**filters, "status": StatusSolicitacao.NOVA.value}
         )
-        leads_em_atendimento = await lead_service.count(
-            parceiro_id=parceiro_id,
-            status=LeadStatus.EM_ATENDIMENTO,
+        solicitacoes_em_atendimento = await solicitacao_repo.count(
+            filters={**filters, "status": StatusSolicitacao.EM_ATENDIMENTO.value}
         )
-        leads_convertidos = await lead_service.count(
-            parceiro_id=parceiro_id,
-            status=LeadStatus.CONVERTIDO,
+        solicitacoes_convertidas = await solicitacao_repo.count(
+            filters={**filters, "status": StatusSolicitacao.CONVERTIDA.value}
         )
-        leads_perdidos = await lead_service.count(
-            parceiro_id=parceiro_id,
-            status=LeadStatus.PERDIDO,
+        solicitacoes_perdidas = await solicitacao_repo.count(
+            filters={**filters, "status": StatusSolicitacao.PERDIDA.value}
         )
 
         # Sales counts by status
@@ -271,14 +269,14 @@ class DashboardService:
         comissao_pendente = total_comissao - comissao_paga
 
         # Conversion rate
-        taxa_conversao = (leads_convertidos / total_leads) if total_leads > 0 else 0.0
+        taxa_conversao = (solicitacoes_convertidas / total_solicitacoes) if total_solicitacoes > 0 else 0.0
 
         return MetricasParceiro(
-            total_leads=total_leads,
-            leads_novos=leads_novos,
-            leads_em_atendimento=leads_em_atendimento,
-            leads_convertidos=leads_convertidos,
-            leads_perdidos=leads_perdidos,
+            total_solicitacoes=total_solicitacoes,
+            solicitacoes_novas=solicitacoes_novas,
+            solicitacoes_em_atendimento=solicitacoes_em_atendimento,
+            solicitacoes_convertidas=solicitacoes_convertidas,
+            solicitacoes_perdidas=solicitacoes_perdidas,
             total_vendas=total_vendas,
             vendas_pendentes=vendas_pendentes,
             vendas_pagas=vendas_pagas,
@@ -356,4 +354,4 @@ class DashboardService:
         elif isinstance(timestamp, (int, float)):
             timestamp = datetime.fromtimestamp(timestamp / 1000)
 
-        return data_inicio <= timestamp <= data_fim
+        return data_inicio.replace(tzinfo=None) <= timestamp.replace(tzinfo=None) <= data_fim.replace(tzinfo=None)

@@ -320,102 +320,31 @@ class ParceiroRepository(BaseRepository):
         return await self.create(data, id_prefix="PARC")
 
 
-class LeadRepository(BaseRepository):
+class SolicitacaoRepository(BaseRepository):
     """
-    Repository for leads collection.
-    Handles lead-related Firestore operations.
+    Repository for solicitacoes (quotation requests) collection.
     """
 
     def __init__(self, db: firestore.Client):
         """
-        Initialize LeadRepository.
+        Initialize SolicitacaoRepository.
 
         Args:
             db: Firestore client
         """
-        super().__init__(db, "leads")
+        super().__init__(db, "solicitacoes")
 
-    async def get_by_id(self, lead_id: str) -> Optional[Dict[str, Any]]:
+    async def find_by_parceiro_id(self, parceiro_id: str) -> List[Dict[str, Any]]:
         """
-        Get a lead by ID.
+        Find solicitations by a specific partner ID.
 
         Args:
-            lead_id: Lead ID
+            parceiro_id: The ID of the partner.
 
         Returns:
-            Lead data or None if not found
-        """
-        return await self.get(lead_id)
-
-    async def create_lead(
-        self,
-        nome: str,
-        telefone: str,
-        parceiro_id: str,
-        origem: str = "qr_code",
-        status: str = "novo",
-    ) -> str:
-        """
-        Create a new lead.
-
-        Args:
-            nome: Lead name
-            telefone: Lead phone
-            parceiro_id: Associated partner ID
-            origem: Lead origin (default "qr_code")
-            status: Lead status (default "novo")
-
-        Returns:
-            Created lead ID
-        """
-        from datetime import datetime
-
-        data = {
-            "nome": nome,
-            "telefone": telefone,
-            "parceiro_id": parceiro_id,
-            "origem": origem,
-            "status": status,
-            "created_at": datetime.utcnow(),
-        }
-        return await self.create(data, id_prefix="LEAD")
-
-    async def get_by_parceiro(self, parceiro_id: str) -> List[Dict[str, Any]]:
-        """
-        Get all leads from a specific partner.
-
-        Args:
-            parceiro_id: Partner ID
-
-        Returns:
-            List of leads
+            A list of matching solicitations.
         """
         return await self.list(filters={"parceiro_id": parceiro_id})
-
-    async def get_by_status(self, status: str) -> List[Dict[str, Any]]:
-        """
-        Get all leads with a specific status.
-
-        Args:
-            status: Lead status
-
-        Returns:
-            List of leads
-        """
-        return await self.list(filters={"status": status})
-
-    async def update_status(self, lead_id: str, status: str) -> bool:
-        """
-        Update lead status.
-
-        Args:
-            lead_id: Lead ID
-            status: New status
-
-        Returns:
-            True if updated successfully
-        """
-        return await self.update(lead_id, {"status": status})
 
 
 class VendaRepository(BaseRepository):
@@ -447,7 +376,7 @@ class VendaRepository(BaseRepository):
 
     async def create_venda(
         self,
-        lead_id: str,
+        solicitacao_id: str,
         parceiro_id: str,
         valor_venda: float,
         percentual_comissao: float,
@@ -457,7 +386,7 @@ class VendaRepository(BaseRepository):
         Create a new sale.
 
         Args:
-            lead_id: Associated lead ID
+            solicitacao_id: Associated solicitation ID
             parceiro_id: Associated partner ID
             valor_venda: Sale value
             percentual_comissao: Commission percentage
@@ -471,7 +400,7 @@ class VendaRepository(BaseRepository):
         comissao = valor_venda * percentual_comissao
 
         data = {
-            "lead_id": lead_id,
+            "solicitacao_id": solicitacao_id,
             "parceiro_id": parceiro_id,
             "valor_venda": valor_venda,
             "percentual_comissao": percentual_comissao,
@@ -493,17 +422,17 @@ class VendaRepository(BaseRepository):
         """
         return await self.list(filters={"parceiro_id": parceiro_id})
 
-    async def get_by_lead(self, lead_id: str) -> List[Dict[str, Any]]:
+    async def get_by_solicitacao(self, solicitacao_id: str) -> List[Dict[str, Any]]:
         """
-        Get all sales from a specific lead.
+        Get all sales from a specific solicitation.
 
         Args:
-            lead_id: Lead ID
+            solicitacao_id: Solicitation ID
 
         Returns:
             List of sales
         """
-        return await self.list(filters={"lead_id": lead_id})
+        return await self.list(filters={"solicitacao_id": solicitacao_id})
 
     async def update_status(self, venda_id: str, status: str) -> bool:
         """

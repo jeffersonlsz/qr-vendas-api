@@ -51,22 +51,41 @@ def sample_parceiro_data() -> dict:
 
 
 @pytest.fixture
-def sample_lead_data(sample_parceiro_data) -> dict:
-    """Sample lead data for tests."""
+def sample_solicitacao_data(sample_parceiro_data) -> dict:
+    """Sample solicitation data for tests."""
     return {
-        "nome": "Test Lead",
-        "telefone": "+55988888888",
         "parceiro_id": sample_parceiro_data["id"],
-        "origem": "qr_code",
-        "observacoes": "Test observation",
+        "vidas": [{"idade": 30}, {"idade": 25}],
+        "cobertura": "regional",
+        "cidade": "São Paulo",
+        "uf": "SP",
     }
 
 
+
+@pytest.fixture(scope="function")
+def db() -> Generator:
+    """
+    Firestore client fixture that provides a clean slate for each test.
+    Deletes all documents from 'parceiros' collection before each test.
+    """
+    from src.db.connection import get_firestore_client
+    
+    db_client = get_firestore_client()
+    
+    # Clean up before the test
+    parceiros_ref = db_client.collection("parceiros")
+    docs = parceiros_ref.stream()
+    for doc in docs:
+        doc.reference.delete()
+        
+    yield db_client
+
 @pytest.fixture
-def sample_venda_data(sample_lead_data) -> dict:
+def sample_venda_data() -> dict:
     """Sample sale data for tests."""
     return {
-        "lead_id": None,  # Will be set after lead creation
+        "solicitacao_id": "SOL_TEST_123",
         "valor_venda": 1500.00,
         "descricao": "Test sale",
     }

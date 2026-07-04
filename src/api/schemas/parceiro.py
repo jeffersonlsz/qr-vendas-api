@@ -119,7 +119,7 @@ class ParceiroResumo(BaseModel):
 
     parceiro_id: str
     nome: str
-    total_leads: int = 0
+    total_solicitacoes: int = Field(0, alias="total_leads")
     total_vendas: int = 0
     total_comissao: float = 0.0
     valor_total_vendas: float = 0.0

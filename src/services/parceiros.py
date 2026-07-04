@@ -14,8 +14,10 @@ from src.api.schemas.parceiro import (
     ParceiroResumo,
     ParceiroUpdate,
 )
+from src.api.schemas.solicitacao import SolicitacaoOut
 from src.core.exceptions import ConflictException, NotFoundException, ValidationException
 from src.db.connection import get_server_timestamp
+from src.db.repositories import SolicitacaoRepository
 from src.services.base import BaseService
 
 logger = logging.getLogger(__name__)
@@ -37,6 +39,21 @@ class ParceiroService(BaseService):
             db: Firestore client
         """
         super().__init__(db, self.COLLECTION_NAME)
+        self.solicitacao_repo = SolicitacaoRepository(db)
+
+    async def get_solicitacoes_by_parceiro(self, parceiro_id: str) -> List[SolicitacaoOut]:
+        """
+        Get all solicitations for a specific partner.
+
+        Args:
+            parceiro_id: The ID of the partner.
+
+        Returns:
+            A list of solicitations for the partner.
+        """
+        await self.get_by_id_or_raise(parceiro_id)
+        solicitacoes_data = await self.solicitacao_repo.find_by_parceiro_id(parceiro_id)
+        return [SolicitacaoOut(**data) for data in solicitacoes_data]
 
     async def create(self, data: ParceiroCreate) -> Dict[str, Any]:
         """
@@ -248,13 +265,13 @@ class ParceiroService(BaseService):
         partner = await self.get_by_id_or_raise(partner_id)
 
         # Import here to avoid circular imports
-        from src.services.leads import LeadService
+        from src.db.repositories import SolicitacaoRepository
         from src.services.vendas import VendaService
 
-        lead_service = LeadService(self.db)
+        solicitacao_repo = SolicitacaoRepository(self.db)
         venda_service = VendaService(self.db)
 
-        total_leads = await lead_service.count(parceiro_id=partner_id)
+        total_solicitacoes = await solicitacao_repo.count(filters={"parceiro_id": partner_id})
         total_vendas = await venda_service.count(parceiro_id=partner_id)
 
         # Get total commission from sales
@@ -265,7 +282,7 @@ class ParceiroService(BaseService):
         return ParceiroResumo(
             parceiro_id=partner_id,
             nome=partner["nome"],
-            total_leads=total_leads,
+            total_solicitacoes=total_solicitacoes,
             total_vendas=total_vendas,
             total_comissao=total_comissao,
             valor_total_vendas=valor_total_vendas,

@@ -6,12 +6,6 @@ from .parceiro import (
     ParceiroResponse,
     ParceiroResumo,
 )
-from .lead import (
-    LeadCreate,
-    LeadUpdate,
-    LeadResponse,
-    LeadStatus,
-)
 from .venda import (
     VendaCreate,
     VendaUpdate,
@@ -28,10 +22,6 @@ __all__ = [
     "ParceiroUpdate",
     "ParceiroResponse",
     "ParceiroResumo",
-    "LeadCreate",
-    "LeadUpdate",
-    "LeadResponse",
-    "LeadStatus",
     "VendaCreate",
     "VendaUpdate",
     "VendaResponse",

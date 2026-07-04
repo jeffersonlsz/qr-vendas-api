@@ -1,3 +1,4 @@
+# src\api\routers\parceiros.py
 """
 Vendas (Sales) API Router.
 Handles all sale-related endpoints.
@@ -43,13 +44,13 @@ async def create_venda(
     """
     Create a new sale.
 
-    - **lead_id**: Lead ID associated with this sale
+    - **solicitacao_id**: ID da Solicitação associada a esta venda
     - **valor_venda**: Sale value
     - **descricao**: Optional sale description
     - **status**: Sale status (default: pendente)
 
     The commission is automatically calculated based on the partner's commission rate.
-    The lead status is automatically updated to 'convertido'.
+    The solicitation status is automatically updated to 'convertida'.
     """
     venda = await service.create(data)
     return DataResponse(
@@ -67,7 +68,7 @@ async def create_venda(
 )
 async def list_vendas(
     parceiro_id: Optional[str] = Query(None, description="Filter by partner ID"),
-    lead_id: Optional[str] = Query(None, description="Filter by lead ID"),
+    solicitacao_id: Optional[str] = Query(None, description="Filter by solicitation ID"),
     status: Optional[VendaStatus] = Query(None, description="Filter by status"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
@@ -77,7 +78,7 @@ async def list_vendas(
     List sales with filtering options.
 
     - **parceiro_id**: Filter by partner ID
-    - **lead_id**: Filter by lead ID
+    - **solicitacao_id**: Filter by solicitation ID
     - **status**: Filter by sale status
     - **page**: Page number (starts at 1)
     - **page_size**: Number of items per page (max 100)
@@ -86,7 +87,7 @@ async def list_vendas(
 
     vendas = await service.list(
         parceiro_id=parceiro_id,
-        lead_id=lead_id,
+        solicitacao_id=solicitacao_id,
         status=status,
         limit=page_size + 1,
         offset=offset,
@@ -252,21 +253,21 @@ async def get_vendas_by_parceiro(
 
 
 @router.get(
-    "/lead/{lead_id}",
+    "/solicitacao/{solicitacao_id}",
     response_model=PaginatedResponse[VendaListResponse],
-    summary="Get sales by lead",
-    description="Get all sales for a specific lead.",
+    summary="Get sales by solicitation",
+    description="Get all sales for a specific solicitation.",
 )
-async def get_vendas_by_lead(
-    lead_id: str,
+async def get_vendas_by_solicitacao(
+    solicitacao_id: str,
     service: VendaService = Depends(get_venda_service),
 ):
     """
-    Get all sales for a lead.
+    Get all sales for a solicitation.
 
-    - **lead_id**: The lead's unique identifier
+    - **solicitacao_id**: The solicitation's unique identifier
     """
-    vendas = await service.get_by_lead(lead_id)
+    vendas = await service.get_by_solicitacao(solicitacao_id)
 
     return PaginatedResponse(
         success=True,

@@ -1,6 +1,6 @@
-# Sistema de Captação de Leads via QR Code
+# Sistema de Captação de Solicitações via QR Code
 
-Backend FastAPI para captação e rastreamento de leads através de QR Codes distribuídos em veículos de parceiros.
+Backend FastAPI para captação e rastreamento de solicitações através de QR Codes distribuídos em veículos de parceiros.
 
 ## 🏗️ Arquitetura
 

@@ -1,3 +1,4 @@
+# src\api\routers\dashboard.py
 """
 Dashboard API Router.
 Handles dashboard and metrics endpoints.

@@ -17,11 +17,10 @@ from src.core.exceptions import AppException
 from src.core.logging import setup_logging
 from src.db.connection import initialize_firestore, get_firestore_client
 from src.api.routers import (
-    leads_router,
     parceiros_router,
     vendas_router,
     dashboard_router,
-    cotacoes_router,
+    solicitacoes_router,
 )
 
 # Initialize settings and logging
@@ -81,11 +80,10 @@ def create_app() -> FastAPI:
     )
 
     # Register routers
-    app.include_router(leads_router, prefix=settings.api_prefix)
     app.include_router(parceiros_router, prefix=settings.api_prefix)
     app.include_router(vendas_router, prefix=settings.api_prefix)
     app.include_router(dashboard_router, prefix=settings.api_prefix)
-    app.include_router(cotacoes_router, prefix=settings.api_prefix)
+    app.include_router(solicitacoes_router, prefix=settings.api_prefix)
 
     # Register exception handlers
     register_exception_handlers(app)
