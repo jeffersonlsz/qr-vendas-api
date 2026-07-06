@@ -46,9 +46,25 @@ class SolicitacaoService:
         solicitacoes_data = await self.solicitacao_repo.list()
         return solicitacoes_data
 
+    async def get_solicitacao(self, solicitacao_id: str) -> Dict[str, Any]:
+        """
+        Retrieves a single solicitation by its ID.
+
+        Args:
+            solicitacao_id: The ID of the solicitation.
+
+        Returns:
+            The solicitation data.
+
+        Raises:
+            NotFoundException: If the solicitation is not found.
+        """
+        logger.info(f"Retrieving solicitation {solicitacao_id}.")
+        return await self.solicitacao_repo.get_or_raise(solicitacao_id)
+
     async def create_solicitacao(self, solicitacao_data: SolicitacaoCreate) -> str:
         """
-        Creates a new solicitation, including protocol generation and lead creation.
+        Creates a new solicitation, including protocol generation.
 
         Args:
             solicitacao_data: The data for the new solicitation.

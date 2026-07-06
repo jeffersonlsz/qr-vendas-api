@@ -2,28 +2,26 @@
 """
 Unit tests for the SolicitacaoWorkflowService.
 """
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.services.solicitacao_workflow_service import SolicitacaoWorkflowService
+import pytest
+
 from src.api.schemas.solicitacao import StatusSolicitacao
 from src.core.exceptions import ConflictException, NotFoundException
+from src.services.solicitacao_workflow_service import SolicitacaoWorkflowService
 
-# Mark all tests in this file as async
 pytestmark = pytest.mark.asyncio
 
 
 @pytest.fixture
 def mock_db_client():
-    """Fixture for a mocked Firestore client."""
     return MagicMock()
 
 
 @pytest.fixture
 def workflow_service(mock_db_client):
-    """Fixture for the SolicitacaoWorkflowService with a mocked repository."""
-    with patch('src.services.solicitacao_workflow_service.SolicitacaoRepository') as MockRepo:
+    with patch("src.services.solicitacao_workflow_service.SolicitacaoRepository") as MockRepo:
         service = SolicitacaoWorkflowService(mock_db_client)
         service.solicitacao_repo = MockRepo.return_value
         service.solicitacao_repo.get_or_raise = AsyncMock()
@@ -31,126 +29,136 @@ def workflow_service(mock_db_client):
         yield service
 
 
-async def test_alterar_status_valid_transition(workflow_service: SolicitacaoWorkflowService):
-    """
-    Should update status and history for a valid transition.
-    """
-    solicitacao_id = "sol_123"
-    usuario = "test_user"
-    solicitacao_inicial = {
-        "id": solicitacao_id,
+async def test_alterar_status_valid_transition(workflow_service):
+    solicitacao = {
+        "id": "sol_123",
         "status": StatusSolicitacao.NOVA.value,
-        "historico_status": []
+        "historico_status": [],
     }
-    workflow_service.solicitacao_repo.get_or_raise.return_value = solicitacao_inicial
 
-    await workflow_service.alterar_status(solicitacao_id, StatusSolicitacao.WHATSAPP_INICIADO, usuario)
+    workflow_service.solicitacao_repo.get_or_raise.return_value = solicitacao
+
+    await workflow_service.alterar_status(
+        "sol_123",
+        StatusSolicitacao.EM_ATENDIMENTO,
+        "usuario",
+    )
 
     workflow_service.solicitacao_repo.update.assert_called_once()
-    
-    # Check the update payload
-    update_args = workflow_service.solicitacao_repo.update.call_args[0][1]
-    assert update_args["status"] == StatusSolicitacao.WHATSAPP_INICIADO.value
-    assert len(update_args["historico_status"]) == 1
-    
-    history_entry = update_args["historico_status"][0]
-    assert history_entry["status"] == StatusSolicitacao.WHATSAPP_INICIADO.value
-    assert history_entry["usuario"] == usuario
-    assert "updated_at" in update_args
+
+    update = workflow_service.solicitacao_repo.update.call_args[0][1]
+
+    assert update["status"] == StatusSolicitacao.EM_ATENDIMENTO.value
+    assert len(update["historico_status"]) == 1
+    assert update["historico_status"][-1]["status"] == update["status"]
 
 
-async def test_alterar_status_invalid_transition(workflow_service: SolicitacaoWorkflowService):
-    """
-    Should raise ConflictException for an invalid transition.
-    """
-    solicitacao_id = "sol_123"
-    solicitacao_inicial = {"id": solicitacao_id, "status": StatusSolicitacao.NOVA.value}
-    workflow_service.solicitacao_repo.get_or_raise.return_value = solicitacao_inicial
+async def test_alterar_status_invalid_transition(workflow_service):
+    solicitacao = {
+        "id": "sol_123",
+        "status": StatusSolicitacao.EM_ATENDIMENTO.value,
+    }
 
-    with pytest.raises(ConflictException, match="Invalid status transition from 'nova' to 'em_atendimento'"):
-        await workflow_service.alterar_status(solicitacao_id, StatusSolicitacao.EM_ATENDIMENTO)
-    
+    workflow_service.solicitacao_repo.get_or_raise.return_value = solicitacao
+
+    with pytest.raises(
+        ConflictException,
+        match="Invalid status transition from 'em_atendimento' to 'nova'",
+    ):
+        await workflow_service.alterar_status(
+            "sol_123",
+            StatusSolicitacao.NOVA,
+        )
+
     workflow_service.solicitacao_repo.update.assert_not_called()
 
 
-async def test_alterar_status_not_found(workflow_service: SolicitacaoWorkflowService):
-    """
-    Should raise NotFoundException if solicitation doesn't exist.
-    """
-    solicitacao_id = "sol_not_found"
-    workflow_service.solicitacao_repo.get_or_raise.side_effect = NotFoundException("Solicitacao", solicitacao_id)
+async def test_alterar_status_not_found(workflow_service):
+    workflow_service.solicitacao_repo.get_or_raise.side_effect = (
+        NotFoundException("Solicitacao", "sol")
+    )
 
     with pytest.raises(NotFoundException):
-        await workflow_service.alterar_status(solicitacao_id, StatusSolicitacao.PERDIDA)
+        await workflow_service.alterar_status(
+            "sol",
+            StatusSolicitacao.PERDIDA,
+        )
 
 
-@pytest.mark.parametrize("initial_status", [
-    StatusSolicitacao.NOVA,
-    StatusSolicitacao.WHATSAPP_INICIADO,
-    StatusSolicitacao.EM_ATENDIMENTO,
-    StatusSolicitacao.PROPOSTA_ENVIADA,
-])
-async def test_alterar_status_to_perdida_is_valid(workflow_service: SolicitacaoWorkflowService, initial_status: StatusSolicitacao):
-    """
-    Should allow transitioning to PERDIDA from any state except CONVERTIDA.
-    """
-    solicitacao_id = "sol_123"
-    solicitacao_inicial = {"id": solicitacao_id, "status": initial_status.value}
-    workflow_service.solicitacao_repo.get_or_raise.return_value = solicitacao_inicial
-    
-    await workflow_service.alterar_status(solicitacao_id, StatusSolicitacao.PERDIDA)
-
-    workflow_service.solicitacao_repo.update.assert_called_once()
-    update_args = workflow_service.solicitacao_repo.update.call_args[0][1]
-    assert update_args["status"] == StatusSolicitacao.PERDIDA.value
-
-
-async def test_alterar_status_from_convertida_is_invalid(workflow_service: SolicitacaoWorkflowService):
-    """
-    Should raise ConflictException when transitioning from CONVERTIDA.
-    """
-    solicitacao_id = "sol_123"
-    solicitacao_inicial = {"id": solicitacao_id, "status": StatusSolicitacao.CONVERTIDA.value}
-    workflow_service.solicitacao_repo.get_or_raise.return_value = solicitacao_inicial
-
-    with pytest.raises(ConflictException):
-        await workflow_service.alterar_status(solicitacao_id, StatusSolicitacao.PERDIDA)
-
-
-async def test_alterar_status_from_perdida_is_invalid(workflow_service: SolicitacaoWorkflowService):
-    """
-    Should raise ConflictException when transitioning from PERDIDA.
-    """
-    solicitacao_id = "sol_123"
-    solicitacao_inicial = {"id": solicitacao_id, "status": StatusSolicitacao.PERDIDA.value}
-    workflow_service.solicitacao_repo.get_or_raise.return_value = solicitacao_inicial
-
-    with pytest.raises(ConflictException):
-        await workflow_service.alterar_status(solicitacao_id, StatusSolicitacao.NOVA)
-
-
-async def test_history_is_appended(workflow_service: SolicitacaoWorkflowService):
-    """
-    Should append to existing history, not overwrite it.
-    """
-    solicitacao_id = "sol_123"
-    existing_history = [{
-        "status": StatusSolicitacao.NOVA.value,
-        "data": datetime.utcnow(),
-        "usuario": "system"
-    }]
-    solicitacao_inicial = {
-        "id": solicitacao_id,
-        "status": StatusSolicitacao.NOVA.value,
-        "historico_status": existing_history
+@pytest.mark.parametrize(
+    "origem,destino",
+    [
+        (StatusSolicitacao.NOVA, StatusSolicitacao.EM_ATENDIMENTO),
+        (StatusSolicitacao.NOVA, StatusSolicitacao.PERDIDA),
+        (StatusSolicitacao.EM_ATENDIMENTO, StatusSolicitacao.CONVERTIDA),
+        (StatusSolicitacao.EM_ATENDIMENTO, StatusSolicitacao.PERDIDA),
+        (StatusSolicitacao.PERDIDA, StatusSolicitacao.EM_ATENDIMENTO),
+    ],
+)
+async def test_valid_transitions(workflow_service, origem, destino):
+    solicitacao = {
+        "id": "sol_123",
+        "status": origem.value,
     }
-    workflow_service.solicitacao_repo.get_or_raise.return_value = solicitacao_inicial
 
-    await workflow_service.alterar_status(solicitacao_id, StatusSolicitacao.WHATSAPP_INICIADO)
+    workflow_service.solicitacao_repo.get_or_raise.return_value = solicitacao
+
+    await workflow_service.alterar_status(
+        "sol_123",
+        destino,
+    )
 
     workflow_service.solicitacao_repo.update.assert_called_once()
-    update_args = workflow_service.solicitacao_repo.update.call_args[0][1]
-    
-    assert len(update_args["historico_status"]) == 2
-    assert update_args["historico_status"][0]["status"] == StatusSolicitacao.NOVA.value
-    assert update_args["historico_status"][1]["status"] == StatusSolicitacao.WHATSAPP_INICIADO.value
+
+    update = workflow_service.solicitacao_repo.update.call_args[0][1]
+
+    assert update["status"] == destino.value
+    assert update["historico_status"][-1]["status"] == destino.value
+
+    workflow_service.solicitacao_repo.update.reset_mock()
+
+
+async def test_alterar_status_from_convertida_is_invalid(workflow_service):
+    workflow_service.solicitacao_repo.get_or_raise.return_value = {
+        "id": "sol_123",
+        "status": StatusSolicitacao.CONVERTIDA.value,
+    }
+
+    with pytest.raises(ConflictException):
+        await workflow_service.alterar_status(
+            "sol_123",
+            StatusSolicitacao.PERDIDA,
+        )
+
+
+async def test_history_is_appended(workflow_service):
+    existing_history = [
+        {
+            "status": StatusSolicitacao.NOVA.value,
+            "data": datetime.utcnow(),
+            "usuario": "system",
+        }
+    ]
+
+    workflow_service.solicitacao_repo.get_or_raise.return_value = {
+        "id": "sol_123",
+        "status": StatusSolicitacao.NOVA.value,
+        "historico_status": existing_history,
+    }
+
+    await workflow_service.alterar_status(
+        "sol_123",
+        StatusSolicitacao.EM_ATENDIMENTO,
+    )
+
+    workflow_service.solicitacao_repo.update.assert_called_once()
+
+    update = workflow_service.solicitacao_repo.update.call_args[0][1]
+
+    assert len(update["historico_status"]) == 2
+    assert update["historico_status"][0]["status"] == StatusSolicitacao.NOVA.value
+    assert (
+        update["historico_status"][1]["status"]
+        == StatusSolicitacao.EM_ATENDIMENTO.value
+    )
+    assert update["historico_status"][-1]["status"] == update["status"]

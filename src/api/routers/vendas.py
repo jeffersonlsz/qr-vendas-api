@@ -35,7 +35,7 @@ def get_venda_service(db=Depends(get_db)) -> VendaService:
     response_model=DataResponse[VendaResponse],
     status_code=status.HTTP_201_CREATED,
     summary="Create a new sale",
-    description="Create a new sale from a converted lead.",
+    description="Create a new sale from a converted solicitation.",
 )
 async def create_venda(
     data: VendaCreate,

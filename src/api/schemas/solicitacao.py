@@ -31,9 +31,7 @@ class Cobertura(str, Enum):
 class StatusSolicitacao(str, Enum):
     """Solicitação status flow."""
     NOVA = "nova"
-    WHATSAPP_INICIADO = "whatsapp_iniciado"
     EM_ATENDIMENTO = "em_atendimento"
-    PROPOSTA_ENVIADA = "proposta_enviada"
     CONVERTIDA = "convertida"
     PERDIDA = "perdida"
 

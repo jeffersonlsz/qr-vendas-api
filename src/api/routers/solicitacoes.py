@@ -50,6 +50,35 @@ async def get_all_solicitacoes_endpoint(db: BaseClient = Depends(get_db)):
         )
 
 
+@router.get(
+    "/{solicitacao_id}",
+    response_model=SolicitacaoOut,
+    status_code=status.HTTP_200_OK,
+    summary="Busca uma Solicitação de Cotação pelo ID",
+    description="Recupera uma única solicitação de cotação com base no seu ID.",
+)
+async def get_solicitacao_by_id_endpoint(solicitacao_id: str, db: BaseClient = Depends(get_db)):
+    """
+    Endpoint to retrieve a single quotation request by its ID.
+    """
+    try:
+        service = SolicitacaoService(db)
+        solicitacao = await service.get_solicitacao(solicitacao_id)
+        return solicitacao
+    except NotFoundException as e:
+        logger.warning(f"Solicitation with ID {solicitacao_id} not found: {e.detail}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=e.detail,
+        )
+    except Exception as e:
+        logger.error(f"An unexpected error occurred while fetching solicitation {solicitacao_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An internal error occurred while processing the request.",
+        )
+
+
 @router.post(
     "",
     response_model=SolicitacaoResponse,

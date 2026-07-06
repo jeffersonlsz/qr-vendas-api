@@ -184,7 +184,7 @@ async def delete_parceiro(
     Deactivate a partner (soft delete).
 
     This sets the partner's active status to false.
-    The partner will not be able to generate new leads.
+    The partner will not be able to generate new solicitations.
 
     - **parceiro_id**: The partner's unique identifier
     """
@@ -208,7 +208,7 @@ async def get_parceiro_resumo(
     """
     Get partner summary with metrics.
 
-    Returns total leads, sales, and commission for the partner.
+    Returns total solicitations, sales, and commission for the partner.
 
     - **parceiro_id**: The partner's unique identifier
     """

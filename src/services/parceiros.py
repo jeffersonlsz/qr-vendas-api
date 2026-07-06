@@ -180,7 +180,7 @@ class ParceiroService(BaseService):
     async def hard_delete(self, partner_id: str) -> bool:
         """
         Permanently delete a partner.
-        Use with caution - should only be used if partner has no associated leads/sales.
+        Use with caution - should only be used if partner has no associated solicitations/sales.
 
         Args:
             partner_id: Partner ID
@@ -254,30 +254,41 @@ class ParceiroService(BaseService):
 
     async def get_resumo(self, partner_id: str) -> ParceiroResumo:
         """
-        Get partner summary with metrics.
+        Get partner summary with corrected metrics.
 
         Args:
             partner_id: Partner ID
 
         Returns:
-            Partner summary with metrics
+            Partner summary with corrected metrics.
         """
         partner = await self.get_by_id_or_raise(partner_id)
 
         # Import here to avoid circular imports
         from src.db.repositories import SolicitacaoRepository
         from src.services.vendas import VendaService
+        from src.api.schemas.venda import VendaStatus
 
         solicitacao_repo = SolicitacaoRepository(self.db)
         venda_service = VendaService(self.db)
 
+        # Count all solicitations from this partner.
         total_solicitacoes = await solicitacao_repo.count(filters={"parceiro_id": partner_id})
-        total_vendas = await venda_service.count(parceiro_id=partner_id)
 
-        # Get total commission from sales
-        vendas = await venda_service.list(parceiro_id=partner_id)
-        total_comissao = sum(v.get("comissao", 0) for v in vendas)
-        valor_total_vendas = sum(v.get("valor_venda", 0) for v in vendas)
+        # Count valid sales (not canceled).
+        total_vendas = await venda_service.count(
+            parceiro_id=partner_id,
+            status__not_in=[VendaStatus.CANCELADO]
+        )
+
+        # Calculate financial metrics based only on paid sales.
+        vendas_pagas = await venda_service.list(
+            parceiro_id=partner_id,
+            status=VendaStatus.PAGO
+        )
+        
+        total_comissao = sum(v.get("comissao", 0) for v in vendas_pagas)
+        valor_total_vendas = sum(v.get("valor_venda", 0) for v in vendas_pagas)
 
         return ParceiroResumo(
             parceiro_id=partner_id,
@@ -308,3 +319,4 @@ class ParceiroService(BaseService):
             raise ValidationException(f"Partner {partner_id} is not active")
 
         return partner
+

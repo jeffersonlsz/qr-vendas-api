@@ -174,6 +174,8 @@ class VendaService(BaseService):
         parceiro_id: Optional[str] = None,
         solicitacao_id: Optional[str] = None,
         status: Optional[VendaStatus] = None,
+        status__in: Optional[List[VendaStatus]] = None,
+        status__not_in: Optional[List[VendaStatus]] = None,
         order_by: str = "created_at",
         descending: bool = True,
         limit: Optional[int] = None,
@@ -185,7 +187,9 @@ class VendaService(BaseService):
         Args:
             parceiro_id: Filter by partner ID
             solicitacao_id: Filter by solicitation ID
-            status: Filter by status
+            status: Filter by a single status
+            status__in: Filter by a list of statuses (IN query)
+            status__not_in: Exclude a list of statuses (post-query filtering)
             order_by: Field to order by
             descending: Order direction
             limit: Maximum results
@@ -205,6 +209,11 @@ class VendaService(BaseService):
         if status:
             status_value = status.value if hasattr(status, "value") else status
             query = query.where("status", "==", status_value)
+        
+        if status__in:
+            status_values = [s.value if hasattr(s, "value") else s for s in status__in]
+            if status_values:
+                query = query.where("status", "in", status_values)
 
         query = query.order_by(
             order_by,
@@ -213,27 +222,55 @@ class VendaService(BaseService):
 
         if offset:
             query = query.offset(offset)
-        if limit:
+        
+        # Limit is applied after not_in filter if it exists
+        if limit and not status__not_in:
             query = query.limit(limit)
 
         docs = query.stream()
-        return [self._serialize_doc(doc) for doc in docs]
+        
+        results = [self._serialize_doc(doc) for doc in docs]
+
+        # Post-query filtering for not_in
+        if status__not_in:
+            status_values_to_exclude = [s.value if hasattr(s, "value") else s for s in status__not_in]
+            results = [r for r in results if r.get("status") not in status_values_to_exclude]
+        
+        if limit and status__not_in:
+            results = results[:limit]
+            
+        return results
 
     async def count(
         self,
         parceiro_id: Optional[str] = None,
         status: Optional[VendaStatus] = None,
+        status__in: Optional[List[VendaStatus]] = None,
+        status__not_in: Optional[List[VendaStatus]] = None,
     ) -> int:
         """
-        Count sales.
+        Count sales with optional filtering.
 
         Args:
             parceiro_id: Filter by partner ID
-            status: Filter by status
+            status: Filter by a single status
+            status__in: Filter by a list of statuses (IN query)
+            status__not_in: Exclude a list of statuses (post-query filtering).
+                            Warning: This is inefficient as it fetches all documents.
 
         Returns:
             Count of sales
         """
+        # If not_in is used, we must fetch and count manually
+        if status__not_in:
+            results = await self.list(
+                parceiro_id=parceiro_id,
+                status=status,
+                status__in=status__in,
+                status__not_in=status__not_in
+            )
+            return len(results)
+
         query = self.collection
 
         if parceiro_id:
@@ -242,6 +279,11 @@ class VendaService(BaseService):
         if status:
             status_value = status.value if hasattr(status, "value") else status
             query = query.where("status", "==", status_value)
+        
+        if status__in:
+            status_values = [s.value if hasattr(s, "value") else s for s in status__in]
+            if status_values:
+                query = query.where("status", "in", status_values)
 
         docs = query.stream()
         return len(list(docs))

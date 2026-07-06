@@ -19,14 +19,22 @@ class SolicitacaoWorkflowService:
     """
     Orchestrates the business logic for status changes in a Solicitação.
     """
-
     VALID_TRANSITIONS = {
-        StatusSolicitacao.NOVA: [StatusSolicitacao.WHATSAPP_INICIADO, StatusSolicitacao.PERDIDA],
-        StatusSolicitacao.WHATSAPP_INICIADO: [StatusSolicitacao.EM_ATENDIMENTO, StatusSolicitacao.PERDIDA],
-        StatusSolicitacao.EM_ATENDIMENTO: [StatusSolicitacao.PROPOSTA_ENVIADA, StatusSolicitacao.PERDIDA],
-        StatusSolicitacao.PROPOSTA_ENVIADA: [StatusSolicitacao.CONVERTIDA, StatusSolicitacao.PERDIDA],
+        StatusSolicitacao.NOVA: [
+            StatusSolicitacao.EM_ATENDIMENTO,
+            StatusSolicitacao.PERDIDA,
+        ],
+
+        StatusSolicitacao.EM_ATENDIMENTO: [
+            StatusSolicitacao.CONVERTIDA,
+            StatusSolicitacao.PERDIDA,
+        ],
+
+        StatusSolicitacao.PERDIDA: [
+            StatusSolicitacao.EM_ATENDIMENTO,
+        ],
+
         StatusSolicitacao.CONVERTIDA: [],
-        StatusSolicitacao.PERDIDA: [],
     }
 
     def __init__(self, db: BaseClient):
