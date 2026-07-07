@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     # Rate limiting (requests per minute)
     rate_limit_per_minute: int = 60
 
+    # Business Logic
+    codigo_cartao_prefix: str = "CARD"
+
     @property
     def is_production(self) -> bool:
         """Check if running in production environment."""

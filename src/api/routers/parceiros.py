@@ -13,9 +13,12 @@ from src.api.schemas.common import DataResponse, PaginatedResponse
 from src.api.schemas.parceiro import (
     ParceiroCreate,
     ParceiroListResponse,
+    ParceiroLoteCreateRequest,
+    ParceiroLoteCreateResponse,
     ParceiroResponse,
     ParceiroResumo,
     ParceiroUpdate,
+    ParceiroAssociacaoUpdate,
 )
 from src.api.schemas.solicitacao import SolicitacaoListResponse
 from src.db.connection import get_db
@@ -29,6 +32,38 @@ router = APIRouter(prefix="/parceiros", tags=["Parceiros"])
 def get_parceiro_service(db=Depends(get_db)) -> ParceiroService:
     """Dependency injection for ParceiroService."""
     return ParceiroService(db)
+
+
+@router.post(
+    "/{parceiro_id}/associar",
+    response_model=DataResponse[ParceiroResponse],
+    summary="Associate card with a partner",
+    description="Associates a pre-generated card with a real partner's details.",
+)
+async def associar_cartao_parceiro(
+    parceiro_id: str,
+    data: ParceiroAssociacaoUpdate,
+    service: ParceiroService = Depends(get_parceiro_service),
+):
+    """
+    Associate a card with a partner.
+
+    This endpoint is used to update the details of a pre-generated partner
+    (card) when it's physically delivered to someone. It can only be used
+    if the card status is 'DISPONIVEL'.
+
+    - **parceiro_id**: The ID of the partner/card to associate.
+    - **nome**: Partner's full name.
+    - **telefone**: Partner's phone number.
+    - **percentual_comissao**: Commission percentage (optional).
+    - **ativo**: Active status (optional).
+    """
+    parceiro = await service.associar_cartao(parceiro_id, data)
+    return DataResponse(
+        success=True,
+        message="Cartão associado ao parceiro com sucesso.",
+        data=parceiro,
+    )
 
 
 @router.get(
@@ -74,6 +109,31 @@ async def create_parceiro(
         success=True,
         message="Partner created successfully",
         data=parceiro,
+    )
+
+
+@router.post(
+    "/lote",
+    response_model=DataResponse[ParceiroLoteCreateResponse],
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a batch of new partners",
+    description="Create a batch of new partners (cards) in the system.",
+)
+async def create_parceiros_lote(
+    data: ParceiroLoteCreateRequest,
+    service: ParceiroService = Depends(get_parceiro_service),
+):
+    """
+    Create a batch of new partners.
+
+    - **quantidade**: Number of partners to create (1-1000)
+    - **prefixo_nome**: Prefix for the partner name (default: "Parceiro")
+    """
+    resultado = await service.create_lote(data)
+    return DataResponse(
+        success=True,
+        message=f"{resultado.quantidade_criada} partners created successfully in batch.",
+        data=resultado,
     )
 
 

@@ -64,22 +64,31 @@ def sample_solicitacao_data(sample_parceiro_data) -> dict:
 
 
 @pytest.fixture(scope="function")
-def db() -> Generator:
+def db(client: TestClient) -> Generator:
     """
     Firestore client fixture that provides a clean slate for each test.
-    Deletes all documents from 'parceiros' collection before each test.
+    Depends on the `client` fixture to ensure the app and DB are initialized.
+    Deletes all documents from 'parceiros' collection before each test run.
     """
     from src.db.connection import get_firestore_client
     
     db_client = get_firestore_client()
     
-    # Clean up before the test
-    parceiros_ref = db_client.collection("parceiros")
-    docs = parceiros_ref.stream()
-    for doc in docs:
-        doc.reference.delete()
+    collections_to_clear = ["parceiros", "solicitacoes", "vendas"]
+    for collection_name in collections_to_clear:
+        docs = db_client.collection(collection_name).stream()
+        for doc in docs:
+            doc.reference.delete()
         
     yield db_client
+
+
+@pytest.fixture(scope="function")
+def parceiro_service(db) -> "ParceiroService":
+    """Provides a ParceiroService instance with a clean DB."""
+    from src.services.parceiros import ParceiroService
+    return ParceiroService(db)
+
 
 @pytest.fixture
 def sample_venda_data() -> dict:

@@ -28,6 +28,14 @@ class ParceiroCreate(ParceiroBase):
         None,
         description="Optional partner ID (e.g., UBER_123). Auto-generated if not provided.",
     )
+    status_cartao: str = Field(
+        "DISPONIVEL",
+        description="Card status. Can be 'DISPONIVEL' or 'EM_USO'.",
+    )
+    numero_sequencial: Optional[int] = Field(
+        None,
+        description="Sequential number for batch-created partners.",
+    )
 
     @field_validator("id")
     @classmethod
@@ -45,6 +53,39 @@ class ParceiroUpdate(BaseModel):
     telefone: Optional[str] = Field(None, min_length=10, max_length=20)
     percentual_comissao: Optional[float] = Field(None, ge=0, le=1)
     ativo: Optional[bool] = None
+    status_cartao: Optional[str] = Field(
+        None,
+        description="Card status. Can be 'DISPONIVEL' or 'EM_USO'.",
+    )
+    numero_sequencial: Optional[int] = Field(
+        None,
+        description="Sequential number for batch-created partners.",
+    )
+    data_entrega_cartao: Optional[datetime] = Field(
+        None,
+        description="Timestamp when the card was delivered.",
+    )
+    entregue_por: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="Person who delivered the card.",
+    )
+
+
+class ParceiroAssociacaoUpdate(BaseModel):
+    """Schema for associating a card with a partner's details."""
+
+    nome: str = Field(..., min_length=2, max_length=100, description="Partner name")
+    telefone: str = Field(..., min_length=10, max_length=20, description="Phone number")
+    percentual_comissao: float = Field(
+        default=0.1,
+        ge=0,
+        le=1,
+        description="Commission percentage (0-1)",
+    )
+    ativo: bool = Field(True, description="Whether partner is active")
+
+
 
 
 class ParceiroResponse(ParceiroBase):
@@ -54,10 +95,18 @@ class ParceiroResponse(ParceiroBase):
 
     id: str
     ativo: bool = True
+    status_cartao: str = Field("DISPONIVEL", description="Card status.")
+    numero_sequencial: Optional[int] = None
+    codigo_cartao: Optional[str] = Field(
+        None,
+        description="Permanent and unique card identifier.",
+    )
+    data_entrega_cartao: Optional[str] = None
+    entregue_por: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
-    @field_validator("created_at", "updated_at", mode="before")
+    @field_validator("created_at", "updated_at", "data_entrega_cartao", mode="before")
     @classmethod
     def convert_timestamp(cls, v):
         """
@@ -95,10 +144,18 @@ class ParceiroListResponse(BaseModel):
     telefone: str
     percentual_comissao: float
     ativo: bool = True
+    status_cartao: str = Field("DISPONIVEL", description="Card status.")
+    numero_sequencial: Optional[int] = None
+    codigo_cartao: Optional[str] = Field(
+        None,
+        description="Permanent and unique card identifier.",
+    )
+    data_entrega_cartao: Optional[str] = None
+    entregue_por: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
-    @field_validator("created_at", "updated_at", mode="before")
+    @field_validator("created_at", "updated_at", "data_entrega_cartao", mode="before")
     @classmethod
     def convert_timestamp(cls, v):
         """Convert Firestore timestamp to ISO string."""
@@ -123,3 +180,30 @@ class ParceiroResumo(BaseModel):
     total_vendas: int = 0
     total_comissao: float = 0.0
     valor_total_vendas: float = 0.0
+
+
+# --- Batch Creation Schemas ---
+
+
+class ParceiroLoteCreateRequest(BaseModel):
+    """Schema for batch creating partners."""
+
+    quantidade: int = Field(
+        ...,
+        ge=1,
+        le=1000,
+        description="Number of partners to create.",
+    )
+    prefixo_nome: str = Field(
+        "Parceiro",
+        description="Prefix for the partner name.",
+    )
+
+
+class ParceiroLoteCreateResponse(BaseModel):
+    """Schema for batch creation response."""
+
+    quantidade_solicitada: int
+    quantidade_criada: int
+    primeiro_nome: str
+    ultimo_nome: str
