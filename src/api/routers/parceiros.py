@@ -8,6 +8,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, status
+from fastapi.responses import StreamingResponse
 
 from src.api.schemas.common import DataResponse, PaginatedResponse
 from src.api.schemas.parceiro import (
@@ -23,6 +24,7 @@ from src.api.schemas.parceiro import (
 from src.api.schemas.solicitacao import SolicitacaoListResponse
 from src.db.connection import get_db
 from src.services.parceiros import ParceiroService
+from src.services.cartaz_service import CartazService, get_cartaz_service
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +85,34 @@ async def get_solicitacoes_by_parceiro(
     """
     solicitacoes = await service.get_solicitacoes_by_parceiro(parceiro_id)
     return SolicitacaoListResponse(solicitacoes=solicitacoes)
+
+
+@router.get(
+    "/{parceiro_id}/cartaz",
+    response_class=StreamingResponse,
+    summary="Generate a PDF poster for a partner",
+    description="Generates a printable PDF poster with a QR code for a single partner.",
+)
+async def gerar_cartaz_parceiro(
+    parceiro_id: str,
+    parceiro_service: ParceiroService = Depends(get_parceiro_service),
+    cartaz_service: CartazService = Depends(get_cartaz_service),
+):
+    """
+    Generate a PDF poster for a partner.
+
+    - **parceiro_id**: The partner's unique identifier.
+    """
+    parceiro_data = await parceiro_service.get_by_id_or_raise(parceiro_id)
+    parceiro = ParceiroResponse(**parceiro_data)
+
+    pdf_bytes = cartaz_service.generate_cartaz_pdf(parceiro)
+
+    return StreamingResponse(
+        iter([pdf_bytes]),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename=cartaz_{parceiro.codigo_cartao}.pdf"},
+    )
 
 
 @router.post(

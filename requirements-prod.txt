@@ -11,5 +11,10 @@ pydantic-settings==2.1.0
 google-cloud-firestore==2.14.0
 firebase-admin==6.4.0
 
+# PDF & QR Code Generation
+reportlab==4.1.0
+qrcode[pil]==7.4.2
+Pillow==10.2.0
+
 
 

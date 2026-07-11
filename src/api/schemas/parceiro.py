@@ -12,7 +12,7 @@ class ParceiroBase(BaseModel):
     """Base schema for Parceiro with common fields."""
 
     nome: str = Field(..., min_length=2, max_length=100, description="Partner name")
-    telefone: str = Field(..., min_length=10, max_length=20, description="Phone number")
+    telefone: str = Field(..., min_length=0, max_length=20, description="Phone number")
     percentual_comissao: float = Field(
         default=0.1,
         ge=0,
@@ -50,7 +50,7 @@ class ParceiroUpdate(BaseModel):
     """Schema for updating a partner."""
 
     nome: Optional[str] = Field(None, min_length=2, max_length=100)
-    telefone: Optional[str] = Field(None, min_length=10, max_length=20)
+    telefone: Optional[str] = Field(None, min_length=0, max_length=20)
     percentual_comissao: Optional[float] = Field(None, ge=0, le=1)
     ativo: Optional[bool] = None
     status_cartao: Optional[str] = Field(
@@ -76,7 +76,7 @@ class ParceiroAssociacaoUpdate(BaseModel):
     """Schema for associating a card with a partner's details."""
 
     nome: str = Field(..., min_length=2, max_length=100, description="Partner name")
-    telefone: str = Field(..., min_length=10, max_length=20, description="Phone number")
+    telefone: str = Field(..., min_length=0, max_length=20, description="Phone number")
     percentual_comissao: float = Field(
         default=0.1,
         ge=0,
