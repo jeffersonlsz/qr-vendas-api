@@ -378,7 +378,9 @@ class ParceiroService(BaseService):
         venda_service = VendaService(self.db)
 
         # Count all solicitations from this partner.
-        total_solicitacoes = await solicitacao_repo.count(filters={"parceiro_id": partner_id})
+        total_solicitacoes = await solicitacao_repo.count(
+            filters=[("parceiro_id", "==", partner_id)]
+        )
 
         # Count valid sales (not canceled).
         total_vendas = await venda_service.count(
