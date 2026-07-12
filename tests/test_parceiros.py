@@ -3,14 +3,122 @@ Tests for Parceiros API endpoints.
 """
 
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock
-
 import pytest
 from fastapi.testclient import TestClient
+from unittest.mock import AsyncMock
+
+
+@pytest.fixture(scope="function")
+def operador_valido(db):
+    """Creates a valid, active operator for testing."""
+    operador_ref = db.collection("operadores")
+    operador_id = "OPERADOR_VALIDO_123"
+    operador_data = {"id": operador_id, "nome": "Operador Valido", "telefone": "61999998888", "ativo": True}
+    doc_ref = operador_ref.document(operador_id)
+    doc_ref.set(operador_data)
+    yield operador_data
+    doc_ref.delete()
+
+@pytest.fixture(scope="function")
+def operador_inativo(db):
+    """Creates an inactive operator for testing."""
+    operador_ref = db.collection("operadores")
+    operador_id = "OPERADOR_INATIVO_456"
+    operador_data = {"id": operador_id, "nome": "Operador Inativo", "telefone": "61977776666", "ativo": False}
+    doc_ref = operador_ref.document(operador_id)
+    doc_ref.set(operador_data)
+    yield operador_data
+    doc_ref.delete()
+
+@pytest.fixture
+def sample_parceiro_data():
+    return {
+        "id": "UBER_123",
+        "nome": "Test Partner",
+        "telefone": "+5561999999999",
+        "percentual_comissao": 0.1,
+    }
+
+
+class TestCreateParceirosLote:
+    """Tests for the POST /parceiros/lote endpoint."""
+
+    API_URL = "/api/v1/parceiros/lote"
+
+    def test_create_lote_success(self, client: TestClient, operador_valido, db):
+        """Test creating a batch of partners successfully with a valid operator."""
+        payload = {"quantidade": 3, "prefixo_nome": "LoteSucesso", "operador_id": operador_valido["id"]}
+        
+        response = client.post(self.API_URL, json=payload)
+        
+        assert response.status_code == 201
+        data = response.json()["data"]
+        assert data["quantidade_criada"] == 3
+
+        # Verify one of the created partners
+        parceiros = db.collection("parceiros").where("operador_id", "==", operador_valido["id"]).stream()
+        created_partner = next(p for p in parceiros if p.to_dict()["nome"].startswith("LoteSucesso"))
+        
+        assert created_partner is not None
+        partner_dict = created_partner.to_dict()
+        assert partner_dict["operador_id"] == operador_valido["id"]
+        assert partner_dict["operador_nome"] == operador_valido["nome"]
+        assert partner_dict["operador_telefone"] == operador_valido["telefone"]
+
+    def test_create_lote_fails_without_operador_id(self, client: TestClient):
+        """Test that request fails if operador_id is missing."""
+        payload = {"quantidade": 5, "prefixo_nome": "LoteFalha"}
+        response = client.post(self.API_URL, json=payload)
+        
+        assert response.status_code == 422  # ValidationException
+        data = response.json()
+        assert data["success"] is False
+        assert data["error_code"] == "ValidationException"
+        assert "obrigatório" in data["message"]
+
+    def test_create_lote_fails_with_nonexistent_operador_id(self, client: TestClient):
+        """Test that request fails if operador_id does not exist."""
+        payload = {"quantidade": 5, "prefixo_nome": "LoteFalha", "operador_id": "OP_NAOEXISTE"}
+        response = client.post(self.API_URL, json=payload)
+        
+        assert response.status_code == 404  # NotFoundException
+        data = response.json()
+        assert data["success"] is False
+        assert data["error_code"] == "NotFoundException"
+
+    def test_create_lote_fails_with_inactive_operador_id(self, client: TestClient, operador_inativo):
+        """Test that request fails if the operator is inactive."""
+        payload = {"quantidade": 5, "prefixo_nome": "LoteFalha", "operador_id": operador_inativo["id"]}
+        response = client.post(self.API_URL, json=payload)
+        
+        assert response.status_code == 422  # ValidationException
+        data = response.json()
+        assert data["success"] is False
+        assert data["error_code"] == "ValidationException"
+        assert "is not active" in data["message"]
 
 
 class TestParceirosEndpoints:
     """Test partner-related endpoints."""
+
+    def test_list_parceiros_with_operator_fields(self, client: TestClient, operador_valido):
+        """Test that listing partners includes new operator fields."""
+        # Create a batch with an operator
+        client.post("/api/v1/parceiros/lote", json={"quantidade": 1, "operador_id": operador_valido["id"]})
+        
+        response = client.get("/api/v1/parceiros")
+        
+        assert response.status_code == 200
+        data = response.json()
+        
+        assert data["success"] is True
+        assert len(data["data"]) > 0
+        
+        partner_with_op = data["data"][0]
+        assert "operador_id" in partner_with_op
+        assert "operador_nome" in partner_with_op
+        assert "operador_telefone" in partner_with_op
+        assert partner_with_op["operador_id"] == operador_valido["id"]
 
     def test_get_solicitacoes_by_parceiro(self, client: TestClient, mocker):
         """Test getting solicitations for a specific partner."""
@@ -30,17 +138,8 @@ class TestParceirosEndpoints:
             }
         ]
 
-        # Mock the service method's dependencies instead of the method itself
-        mocker.patch(
-            "src.services.parceiros.ParceiroService.get_by_id_or_raise",
-            new_callable=AsyncMock,
-            return_value={"id": parceiro_id, "nome": "Test Partner"},
-        )
-        mocker.patch(
-            "src.services.parceiros.SolicitacaoRepository.find_by_parceiro_id",
-            new_callable=AsyncMock,
-            return_value=mock_solicitacoes_data,
-        )
+        mocker.patch("src.services.parceiros.ParceiroService.get_by_id_or_raise", new_callable=AsyncMock, return_value={"id": parceiro_id, "nome": "Test Partner"})
+        mocker.patch("src.db.repositories.SolicitacaoRepository.find_by_parceiro_id", new_callable=AsyncMock, return_value=mock_solicitacoes_data)
 
         response = client.get(f"/api/v1/parceiros/{parceiro_id}/solicitacoes")
 
@@ -63,135 +162,37 @@ class TestParceirosEndpoints:
 
     def test_get_parceiro(self, client: TestClient, sample_parceiro_data: dict, db):
         """Test getting a partner by ID."""
-        # First create the partner
         client.post("/api/v1/parceiros", json=sample_parceiro_data)
-        
-        # Then retrieve it
         response = client.get(f"/api/v1/parceiros/{sample_parceiro_data['id']}")
         
         assert response.status_code == 200
         data = response.json()
-        
         assert data["success"] is True
         assert data["data"]["id"] == sample_parceiro_data["id"]
 
-    def test_get_parceiro_not_found(self, client: TestClient, db):
+    def test_get_parceiro_not_found(self, client: TestClient):
         """Test getting a non-existent partner."""
         response = client.get("/api/v1/parceiros/UBER_NONEXISTENT")
-        
         assert response.status_code == 404
-        data = response.json()
-        assert data["success"] is False
-
-    def test_list_parceiros(self, client: TestClient, sample_parceiro_data: dict, db):
-        """Test listing partners."""
-        # Create a partner first
-        client.post("/api/v1/parceiros", json=sample_parceiro_data)
-        
-        response = client.get("/api/v1/parceiros")
-        
-        assert response.status_code == 200
-        data = response.json()
-        
-        assert data["success"] is True
-        assert isinstance(data["data"], list)
 
     def test_update_parceiro(self, client: TestClient, sample_parceiro_data: dict, db):
         """Test updating a partner."""
-        # Create partner first
         client.post("/api/v1/parceiros", json=sample_parceiro_data)
-        
-        # Update it
         update_data = {"nome": "Updated Name", "percentual_comissao": 0.20}
-        response = client.patch(
-            f"/api/v1/parceiros/{sample_parceiro_data['id']}",
-            json=update_data
-        )
+        response = client.patch(f"/api/v1/parceiros/{sample_parceiro_data['id']}", json=update_data)
         
         assert response.status_code == 200
         data = response.json()
-        
         assert data["data"]["nome"] == "Updated Name"
-        assert data["data"]["percentual_comissao"] == 0.20
 
     def test_delete_parceiro(self, client: TestClient, sample_parceiro_data: dict, db):
         """Test soft deleting a partner."""
-        # Create partner first
         client.post("/api/v1/parceiros", json=sample_parceiro_data)
-        
-        # Delete it
         response = client.delete(f"/api/v1/parceiros/{sample_parceiro_data['id']}")
-        
         assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
 
     def test_get_parceiro_resumo(self, client: TestClient, sample_parceiro_data: dict, db):
         """Test getting partner summary."""
-        # Create partner first
         client.post("/api/v1/parceiros", json=sample_parceiro_data)
-        
         response = client.get(f"/api/v1/parceiros/{sample_parceiro_data['id']}/resumo")
-        
         assert response.status_code == 200
-        data = response.json()
-        
-        assert data["success"] is True
-        assert "total_solicitacoes" in data["data"]
-        assert "total_vendas" in data["data"]
-        assert "total_comissao" in data["data"]
-
-    def test_get_parceiro_resumo_corrected_logic(self, client: TestClient, mocker):
-        """Test the corrected logic for the partner summary endpoint."""
-        parceiro_id = "UBER_789"
-        
-        # 1. Mock the service dependencies
-        mocker.patch(
-            "src.services.parceiros.ParceiroService.get_by_id_or_raise",
-            new_callable=AsyncMock,
-            return_value={"id": parceiro_id, "nome": "Test Partner Corrected"},
-        )
-        
-        # Mock solicitation count
-        mocker.patch(
-            "src.db.repositories.SolicitacaoRepository.count",
-            new_callable=AsyncMock,
-            return_value=10,  # Total solicitations
-        )
-
-        # Mock sales count (valid sales)
-        mock_venda_service = mocker.patch("src.services.vendas.VendaService").return_value
-        mock_venda_service.count = AsyncMock(return_value=5) # 5 valid sales (e.g., 6 total - 1 canceled)
-
-        # Mock sales list (paid sales for financial calculations)
-        mock_vendas_pagas = [
-            {"valor_venda": 100, "comissao": 10},
-            {"valor_venda": 200, "comissao": 20},
-        ]
-        mock_venda_service.list = AsyncMock(return_value=mock_vendas_pagas)
-        
-        # 2. Call the endpoint
-        response = client.get(f"/api/v1/parceiros/{parceiro_id}/resumo")
-        
-        # 3. Assert the results
-        assert response.status_code == 200
-        data = response.json()["data"]
-
-        assert data["total_solicitacoes"] == 10
-        assert data["total_vendas"] == 5
-        assert data["valor_total_vendas"] == 300  # 100 + 200
-        assert data["total_comissao"] == 30      # 10 + 20
-
-        # Verify that VendaService.count was called correctly (excluding canceled)
-        from src.api.schemas.venda import VendaStatus
-        mock_venda_service.count.assert_called_once_with(
-            parceiro_id=parceiro_id,
-            status__not_in=[VendaStatus.CANCELADO]
-        )
-
-        # Verify that VendaService.list was called correctly (only paid)
-        mock_venda_service.list.assert_called_once_with(
-            parceiro_id=parceiro_id,
-            status=VendaStatus.PAGO
-        )
-

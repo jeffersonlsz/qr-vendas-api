@@ -36,6 +36,9 @@ class ParceiroCreate(ParceiroBase):
         None,
         description="Sequential number for batch-created partners.",
     )
+    operador_id: Optional[str] = Field(None, description="Associated operator ID.")
+    operador_nome: Optional[str] = Field(None, description="Associated operator name (snapshot).")
+    operador_telefone: Optional[str] = Field(None, description="Associated operator phone (snapshot).")
 
     @field_validator("id")
     @classmethod
@@ -70,6 +73,9 @@ class ParceiroUpdate(BaseModel):
         max_length=100,
         description="Person who delivered the card.",
     )
+    operador_id: Optional[str] = Field(None, description="Associated operator ID.")
+    operador_nome: Optional[str] = Field(None, description="Associated operator name (snapshot).")
+    operador_telefone: Optional[str] = Field(None, description="Associated operator phone (snapshot).")
 
 
 class ParceiroAssociacaoUpdate(BaseModel):
@@ -84,8 +90,6 @@ class ParceiroAssociacaoUpdate(BaseModel):
         description="Commission percentage (0-1)",
     )
     ativo: bool = Field(True, description="Whether partner is active")
-
-
 
 
 class ParceiroResponse(ParceiroBase):
@@ -105,32 +109,25 @@ class ParceiroResponse(ParceiroBase):
     entregue_por: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
+    operador_id: Optional[str] = None
+    operador_nome: Optional[str] = None
+    operador_telefone: Optional[str] = None
 
     @field_validator("created_at", "updated_at", "data_entrega_cartao", mode="before")
     @classmethod
     def convert_timestamp(cls, v):
         """
         Convert Firestore timestamp to ISO string.
-        
-        Handles:
-        - DatetimeWithNanoseconds (Firestore native)
-        - Standard datetime objects
-        - Already serialized strings
-        - None values
         """
         if v is None:
             return None
-        # Firestore DatetimeWithNanoseconds or datetime-like objects
         if hasattr(v, "isoformat"):
             iso_string = v.isoformat()
-            # Ensure UTC timezone indicator
             if iso_string.endswith("+00:00"):
                 iso_string = iso_string.replace("+00:00", "Z")
             return iso_string
-        # Already a string (pass-through)
         if isinstance(v, str):
             return v
-        # Fallback
         return str(v) if v else None
 
 
@@ -154,6 +151,9 @@ class ParceiroListResponse(BaseModel):
     entregue_por: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
+    operador_id: Optional[str] = None
+    operador_nome: Optional[str] = None
+    operador_telefone: Optional[str] = None
 
     @field_validator("created_at", "updated_at", "data_entrega_cartao", mode="before")
     @classmethod
@@ -198,6 +198,7 @@ class ParceiroLoteCreateRequest(BaseModel):
         "Parceiro",
         description="Prefix for the partner name.",
     )
+    operador_id: Optional[str] = Field(None, description="Associated operator ID.")
 
 
 class ParceiroLoteCreateResponse(BaseModel):

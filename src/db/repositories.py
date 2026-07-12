@@ -65,7 +65,7 @@ class BaseRepository(Generic[T]):
         doc = await asyncio.to_thread(doc_ref.get)
 
         if not doc.exists:
-            raise NotFoundException(resource_name=self.collection.id, resource_id=doc_id)
+            raise NotFoundException(resource=self.collection.id, identifier=doc_id)
         
         return self._serialize_doc(doc)
 

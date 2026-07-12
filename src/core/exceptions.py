@@ -41,7 +41,7 @@ class ValidationException(AppException):
     """Business validation exception."""
 
     def __init__(self, message: str = "Validation failed"):
-        super().__init__(message=message, status_code=400)
+        super().__init__(message=message, status_code=422)
 
 
 class UnauthorizedException(AppException):

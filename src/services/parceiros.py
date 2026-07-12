@@ -29,6 +29,9 @@ from src.services.base import BaseService
 logger = logging.getLogger(__name__)
 
 
+from src.services.operador_service import OperadorService
+
+
 class ParceiroService(BaseService):
     """
     Service for partner operations.
@@ -46,6 +49,7 @@ class ParceiroService(BaseService):
         """
         super().__init__(db, self.COLLECTION_NAME)
         self.solicitacao_repo = SolicitacaoRepository(db)
+        self.operador_service = OperadorService(db)
 
     async def get_solicitacoes_by_parceiro(self, parceiro_id: str) -> List[SolicitacaoOut]:
         """
@@ -101,6 +105,9 @@ class ParceiroService(BaseService):
             "codigo_cartao": codigo_cartao,
             "data_entrega_cartao": None,
             "entregue_por": None,
+            "operador_id": data.operador_id,
+            "operador_nome": data.operador_nome,
+            "operador_telefone": data.operador_telefone,
             "ativo": True,
             "created_at": get_server_timestamp(),
             "updated_at": get_server_timestamp(),
@@ -138,15 +145,20 @@ class ParceiroService(BaseService):
         self, data: ParceiroLoteCreateRequest
     ) -> ParceiroLoteCreateResponse:
         """
-        Create a batch of new partners.
+        Create a batch of new partners with an associated operator.
         """
+        if not data.operador_id:
+            raise ValidationException("É obrigatório informar um operador responsável.")
+
+        operador = await self.operador_service.validate_and_get(data.operador_id)
+
         start_num = await self._get_proximo_numero_sequencial()
         end_num = start_num + data.quantidade
         created_count = 0
 
         logger.info(
             f"Starting batch creation of {data.quantidade} partners "
-            f"with prefix '{data.prefixo_nome}' from number {start_num}."
+            f"for operator {operador['nome']} (ID: {operador['id']})."
         )
 
         current_batch = self.db.batch()
@@ -161,13 +173,16 @@ class ParceiroService(BaseService):
             partner_data = {
                 "id": partner_id,
                 "nome": nome,
-                "telefone": "",  # As per requirement
-                "percentual_comissao": 0.1,  # Default value
+                "telefone": "",
+                "percentual_comissao": 0.1,
                 "status_cartao": "DISPONIVEL",
                 "numero_sequencial": i,
                 "codigo_cartao": codigo_cartao,
                 "data_entrega_cartao": None,
                 "entregue_por": None,
+                "operador_id": operador["id"],
+                "operador_nome": operador["nome"],
+                "operador_telefone": operador["telefone"],
                 "ativo": True,
                 "created_at": get_server_timestamp(),
                 "updated_at": get_server_timestamp(),
@@ -178,20 +193,17 @@ class ParceiroService(BaseService):
             batch_count += 1
             created_count += 1
 
-            # Commit batch if it reaches the limit
             if batch_count == BATCH_LIMIT:
                 logger.info(f"Committing a batch of {batch_count} partners.")
                 await asyncio.to_thread(current_batch.commit)
-                # Start a new batch
                 current_batch = self.db.batch()
                 batch_count = 0
 
-        # Commit any remaining items in the last batch
         if batch_count > 0:
             logger.info(f"Committing the final batch of {batch_count} partners.")
             await asyncio.to_thread(current_batch.commit)
 
-        logger.info(f"Successfully created {created_count} partners.")
+        logger.info(f"Successfully created {created_count} partners for operator {operador['id']}.")
 
         return ParceiroLoteCreateResponse(
             quantidade_solicitada=data.quantidade,
