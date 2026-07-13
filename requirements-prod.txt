@@ -1,5 +1,5 @@
-google-cloud-firestore==2.21.0
-firebase-admin==7.1.0
+google-cloud-firestore==2.14.0
+firebase-admin==6.4.0
 fastapi==0.139.0
 httpx==0.28.1
 Pillow==12.3.0
