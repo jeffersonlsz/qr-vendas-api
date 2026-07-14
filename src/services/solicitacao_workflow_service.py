@@ -10,7 +10,7 @@ from google.cloud.firestore_v1.base_client import BaseClient
 
 from src.api.schemas.solicitacao import HistoricoStatusSchema, StatusSolicitacao
 from src.core.exceptions import ConflictException
-from src.db.repositories import SolicitacaoRepository
+from src.db.repositories.solicitacao_repository import SolicitacaoRepository
 
 logger = logging.getLogger(__name__)
 
@@ -99,4 +99,3 @@ class SolicitacaoWorkflowService:
 
         await self.solicitacao_repo.update(solicitacao_id, update_data)
         logger.info(f"Successfully changed status of solicitation {solicitacao_id} to {novo_status.value}")
-

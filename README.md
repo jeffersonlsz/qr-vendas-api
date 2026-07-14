@@ -163,3 +163,319 @@ gcloud run deploy sist-vendas-uber \
 ## 📝 License
 
 MIT
+
+
+
+# 🚀 Deploy de Produção - Sistema de Vendas de Saúde (FastAPI + Cloud Run)
+
+Este documento descreve o fluxo completo de deploy e operação do backend em produção utilizando:
+
+- **FastAPI**
+- **Google Cloud Run**
+- **Cloud Build**
+- **Artifact Registry**
+- **Firestore**
+- **Firebase Hosting (Frontend)**
+
+---
+
+# Arquitetura
+
+```text
+GitHub (main)
+        ↓
+Cloud Build
+        ↓
+Artifact Registry
+        ↓
+Cloud Run (FastAPI)
+        ↓
+Firestore
+        ↓
+Frontend Vue (Firebase Hosting)
+```
+Projeto Google Cloud:
+
+qr-saude-alpha
+
+Região:
+
+southamerica-east1 (São Paulo)
+Pré-requisitos
+
+Instalar:
+
+Docker Desktop
+Google Cloud CLI
+Git
+
+Autenticar:
+
+gcloud auth login
+gcloud auth application-default login
+
+Definir projeto:
+
+gcloud config set project qr-saude-alpha
+
+Verificar:
+
+gcloud config get-value project
+
+Resultado esperado:
+
+qr-saude-alpha
+Habilitar APIs necessárias
+gcloud services enable \
+  run.googleapis.com \
+  cloudbuild.googleapis.com \
+  artifactregistry.googleapis.com
+Estrutura de Produção
+Backend
+Cloud Run
+Service: qr-saude-api
+Frontend
+Firebase Hosting
+Banco de Dados
+Firestore (produção)
+Variáveis de Ambiente
+
+Exemplo:
+
+APP_NAME=Sistema de Captação de Leads
+APP_VERSION=0.1.0
+DEBUG=false
+ENVIRONMENT=production
+
+API_PREFIX=/api/v1
+
+FIRESTORE_PROJECT_ID=qr-saude-alpha
+
+LOG_LEVEL=INFO
+RATE_LIMIT_PER_MINUTE=60
+⚠️ Não utilizar em produção
+FIRESTORE_EMULATOR_HOST=localhost:8080
+
+O Emulator é apenas para desenvolvimento local.
+
+Dependências
+
+Atualizar:
+
+pip freeze > requirements-prod.txt
+
+ou manter manualmente:
+
+fastapi
+uvicorn
+google-cloud-firestore
+firebase-admin
+reportlab
+Pillow
+qrcode
+pydantic
+pydantic-settings
+
+Evitar incluir:
+
+pytest
+pytest-mock
+pytest-cov
+
+no arquivo de produção.
+
+Dockerfile
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY requirements-prod.txt .
+
+RUN pip install --no-cache-dir -r requirements-prod.txt
+
+COPY . .
+
+ENV PYTHONUNBUFFERED=1
+ENV PORT=8080
+
+CMD exec uvicorn src.main:app \
+    --host 0.0.0.0 \
+    --port ${PORT}
+.dockerignore
+venv/
+.git/
+.pytest_cache/
+__pycache__/
+.env
+node_modules/
+firebase-emulator-data/
+Testar localmente com Docker
+
+Build:
+
+docker build -t qr-saude-api .
+
+Executar:
+
+docker run -p 8080:8080 qr-saude-api
+
+Swagger:
+
+http://localhost:8080/docs
+Primeiro Deploy Manual
+
+Executar:
+
+gcloud run deploy qr-saude-api \
+  --source . \
+  --region southamerica-east1 \
+  --allow-unauthenticated
+URL de Produção
+https://qr-saude-api-533957625089.southamerica-east1.run.app
+Consultar Logs
+
+Últimos logs:
+
+gcloud run services logs read qr-saude-api \
+  --region=southamerica-east1 \
+  --limit=50
+
+Logs em tempo real:
+
+gcloud beta run services logs tail qr-saude-api \
+  --region=southamerica-east1
+Fazer Novo Deploy
+
+Após alterações:
+
+git add .
+git commit -m "descricao"
+git push
+
+gcloud run deploy qr-saude-api \
+  --source . \
+  --region southamerica-east1 \
+  --allow-unauthenticated
+Configuração Recomendada do Cloud Run
+
+CPU:
+
+1 vCPU
+
+Memória:
+
+512 MB
+
+Instâncias mínimas:
+
+0
+
+Instâncias máximas:
+
+2
+
+Concorrência:
+
+80
+CORS
+
+Exemplo:
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://SEU_APP.web.app",
+        "https://SEU_APP.firebaseapp.com",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+Durante homologação:
+
+allow_origins=["*"]
+Configuração do Frontend
+VITE_API_URL=https://qr-saude-api-533957625089.southamerica-east1.run.app
+
+Deploy:
+
+npm run build
+firebase deploy
+Permissões IAM
+
+A Service Account do Cloud Run deve possuir:
+
+Cloud Datastore User
+
+ou
+
+Cloud Datastore Owner
+
+para o MVP.
+
+Checklist de Produção
+Infraestrutura
+ Cloud Run criado
+ Artifact Registry criado
+ Billing ativo
+ APIs habilitadas
+ Firestore em produção
+Backend
+ /docs funcionando
+ /openapi.json funcionando
+ Logs sem erros
+ Conexão com Firestore funcionando
+ Geração de QR Code funcionando
+ Geração de PDF funcionando
+Frontend
+ Landing Page funcionando
+ Dashboard funcionando
+ Login funcionando
+ Comunicação com API funcionando
+Fluxos de Negócio
+ Cadastro de parceiros
+ Geração de cartões em lote
+ Impressão de cartazes
+ Registro de leads
+ Registro de vendas
+ Dashboard de métricas
+Recuperação de Erros
+
+Caso um deploy falhe:
+
+Listar revisões:
+
+gcloud run revisions list \
+  --service=qr-saude-api \
+  --region=southamerica-east1
+
+Voltar para revisão anterior:
+
+gcloud run services update-traffic qr-saude-api \
+  --to-revisions REVISION_NAME=100 \
+  --region southamerica-east1
+Fluxo de Produção
+Desenvolvimento
+      ↓
+Commit
+      ↓
+Push
+      ↓
+Build Docker
+      ↓
+Deploy Cloud Run
+      ↓
+Smoke Test
+      ↓
+Homologação Cliente
+      ↓
+Produção
+Próximos Passos (Pós-MVP)
+Deploy automático via GitHub Actions ou Cloud Build Trigger
+Domínio customizado (api.seudominio.com.br)
+Monitoramento e alertas
+Ambiente de homologação
+Banco de dados separado para staging
+Observabilidade (Cloud Monitoring)
+Backup automatizado do Firestore

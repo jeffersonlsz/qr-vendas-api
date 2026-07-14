@@ -1,3 +1,4 @@
+# src\services\parceiros.py
 """
 Parceiro (Partner) Service.
 Handles business logic for partner operations.
@@ -17,13 +18,18 @@ from src.api.schemas.parceiro import (
     ParceiroLoteCreateResponse,
     ParceiroResponse,
     ParceiroResumo,
+    ParceiroResumoSolicitacao,
     ParceiroUpdate,
 )
-from src.api.schemas.solicitacao import SolicitacaoOut
+from src.api.schemas.solicitacao import (
+    SolicitacaoListItem,
+    SolicitacaoOut,
+    StatusSolicitacao,
+)
 from src.core.config import get_settings
 from src.core.exceptions import ConflictException, NotFoundException, ValidationException
 from src.db.connection import get_server_timestamp
-from src.db.repositories import SolicitacaoRepository
+from src.db.repositories.solicitacao_repository import SolicitacaoRepository
 from src.services.base import BaseService
 
 logger = logging.getLogger(__name__)
@@ -51,7 +57,9 @@ class ParceiroService(BaseService):
         self.solicitacao_repo = SolicitacaoRepository(db)
         self.operador_service = OperadorService(db)
 
-    async def get_solicitacoes_by_parceiro(self, parceiro_id: str) -> List[SolicitacaoOut]:
+    async def get_solicitacoes_by_parceiro(
+        self, parceiro_id: str
+    ) -> List[SolicitacaoListItem]:
         """
         Get all solicitations for a specific partner.
 
@@ -59,11 +67,24 @@ class ParceiroService(BaseService):
             parceiro_id: The ID of the partner.
 
         Returns:
-            A list of solicitations for the partner.
+            A list of solicitations for the partner, formatted for list views.
         """
-        await self.get_by_id_or_raise(parceiro_id)
-        solicitacoes_data = await self.solicitacao_repo.find_by_parceiro_id(parceiro_id)
-        return [SolicitacaoOut(**data) for data in solicitacoes_data]
+        parceiro_data = await self.get_by_id_or_raise(parceiro_id)
+        parceiro_resumo = ParceiroResumoSolicitacao(
+            id=parceiro_data["id"],
+            nome=parceiro_data["nome"],
+            codigo_cartao=parceiro_data.get("codigo_cartao"),
+        )
+
+        solicitacoes_data = await self.solicitacao_repo.find_by_parceiro_id(
+            parceiro_id
+        )
+
+        result = [
+            SolicitacaoListItem(**data, parceiro=parceiro_resumo)
+            for data in solicitacoes_data
+        ]
+        return result
 
     def _generate_codigo_cartao(self, numero_sequencial: int) -> str:
         """Generates a formatted card code based on the sequential number."""
@@ -382,7 +403,7 @@ class ParceiroService(BaseService):
         partner = await self.get_by_id_or_raise(partner_id)
 
         # Import here to avoid circular imports
-        from src.db.repositories import SolicitacaoRepository
+        from src.db.repositories.solicitacao_repository import SolicitacaoRepository
         from src.services.vendas import VendaService
         from src.api.schemas.venda import VendaStatus
 
@@ -392,6 +413,13 @@ class ParceiroService(BaseService):
         # Count all solicitations from this partner.
         total_solicitacoes = await solicitacao_repo.count(
             filters=[("parceiro_id", "==", partner_id)]
+        )
+        
+        total_convertidos = await solicitacao_repo.count(
+            filters=[
+                ("parceiro_id", "==", partner_id),
+                ("status", "==", StatusSolicitacao.CONVERTIDA.value)
+            ]
         )
 
         # Count valid sales (not canceled).
@@ -413,6 +441,7 @@ class ParceiroService(BaseService):
             parceiro_id=partner_id,
             nome=partner["nome"],
             total_solicitacoes=total_solicitacoes,
+            total_convertidos=total_convertidos,
             total_vendas=total_vendas,
             total_comissao=total_comissao,
             valor_total_vendas=valor_total_vendas,
@@ -471,4 +500,3 @@ class ParceiroService(BaseService):
         updated_doc = await self._fetch_document(parceiro_id)
         logger.info(f"Associated card for partner: {parceiro_id}")
         return self._serialize_doc(updated_doc)
-

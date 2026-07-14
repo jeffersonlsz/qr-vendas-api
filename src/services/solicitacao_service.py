@@ -1,165 +1,148 @@
 # src/services/solicitacao_service.py
 """
-Service layer for Solicitação de Cotação feature.
+Business logic for managing Solicitações de Cotação.
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import List, Dict, Any, Optional
 
-from typing import Any, Dict, List
-from google.cloud import firestore
 from google.cloud.firestore_v1.base_client import BaseClient
 
-from src.api.schemas.solicitacao import (DadosComerciaisSchema,
-                                         SolicitacaoCreate,
-                                         StatusSolicitacao)
-from src.db.repositories import (ParceiroRepository,
-                                 SolicitacaoRepository)
+from src.api.schemas.parceiro import ParceiroResumoSolicitacao
+from src.api.schemas.solicitacao import (
+    SolicitacaoCreate,
+    SolicitacaoInDB,
+    SolicitacaoListItem,
+    DadosComerciaisSchema,
+    HistoricoStatusSchema,
+)
 from src.core.exceptions import NotFoundException
+# The following import is incorrect because 'src.db.repositories' is not a package
+# due to a file conflict or incorrect structure.
+# We will correct this by importing from the new __init__.py
+from src.db.repositories.solicitacao_repository import SolicitacaoRepository
+from src.db.repositories.parceiro_repository import ParceiroRepository
 
 logger = logging.getLogger(__name__)
 
 
 class SolicitacaoService:
     """
-    Orchestrates the business logic for creating and managing solicitações.
+    Service layer for handling business logic related to solicitations.
     """
 
     def __init__(self, db: BaseClient):
-        """
-        Initialize the service.
-
-        Args:
-            db: Firestore client.
-        """
         self.db = db
         self.solicitacao_repo = SolicitacaoRepository(db)
         self.parceiro_repo = ParceiroRepository(db)
-
-    async def get_all_solicitacoes(self) -> List[Dict[str, Any]]:
-        """
-        Retrieves all solicitations.
-
-        Returns:
-            A list of all solicitations as dictionaries.
-        """
-        logger.info("Retrieving all solicitations.")
-        solicitacoes_data = await self.solicitacao_repo.list()
-        return solicitacoes_data
-
+        
     async def get_solicitacao(self, solicitacao_id: str) -> Dict[str, Any]:
-        """
-        Retrieves a single solicitation by its ID.
-
-        Args:
-            solicitacao_id: The ID of the solicitation.
-
-        Returns:
-            The solicitation data.
-
-        Raises:
-            NotFoundException: If the solicitation is not found.
-        """
-        logger.info(f"Retrieving solicitation {solicitacao_id}.")
+        """Retrieves a single solicitation by its ID."""
         return await self.solicitacao_repo.get_or_raise(solicitacao_id)
 
-    async def create_solicitacao(self, solicitacao_data: SolicitacaoCreate) -> str:
+    async def get_all_solicitacoes_resumo(self) -> List[Dict[str, Any]]:
         """
-        Creates a new solicitation, including protocol generation.
-
-        Args:
-            solicitacao_data: The data for the new solicitation.
-
-        Returns:
-            The protocol of the newly created solicitation.
-            
-        Raises:
-            NotFoundException: If the parceiro_id does not exist.
+        Retrieves a summary list of all solicitations, enriching them with
+        partner information.
         """
-        logger.info("Starting new solicitation creation process.")
+        solicitacoes_data = await self.solicitacao_repo.get_all_resumo()
 
-        # 1. Validate partner
-        parceiro = await self.parceiro_repo.get(solicitacao_data.parceiro_id)
-        if not parceiro:
-            raise NotFoundException("Parceiro", solicitacao_data.parceiro_id)
+        # Fetch all required partners in a single batch to optimize
+        parceiro_ids = {
+            s["parceiro_id"] for s in solicitacoes_data if "parceiro_id" in s
+        }
+        parceiros_map = {}
+        if parceiro_ids:
+            parceiros_docs = await self.parceiro_repo.get_many(list(parceiro_ids))
+            parceiros_map = {doc["id"]: doc for doc in parceiros_docs}
 
-        # 2. Prepare data for storage
-        now = datetime.utcnow()
-        data_to_save = solicitacao_data.model_dump()
-        data_to_save.update({
-            "protocolo": "placeholder", # Será gerado pelo BaseRepository
-            "status": StatusSolicitacao.NOVA.value,
-            "tipo_contratacao": solicitacao_data.tipo_contratacao.value if solicitacao_data.tipo_contratacao else None,
-            "created_at": now,
-            "updated_at": now,
-        })
-        
-        # Convert enums and other complex types to strings/dicts
-        data_to_save['cobertura'] = data_to_save['cobertura'].value
-        if data_to_save.get('operadoras_preferidas'):
-            data_to_save['operadoras_preferidas'] = [op.value for op in data_to_save['operadoras_preferidas']]
-        data_to_save['vidas'] = [vida.model_dump() for vida in solicitacao_data.vidas]
+        # Build the final list
+        result_list = []
+        for solicitacao_dict in solicitacoes_data:
+            parceiro_id = solicitacao_dict.get("parceiro_id")
+            parceiro_info = None
+            if parceiro_id and parceiro_id in parceiros_map:
+                parceiro_data = parceiros_map[parceiro_id]
+                parceiro_info = ParceiroResumoSolicitacao(
+                    id=parceiro_data.get("id"),
+                    nome=parceiro_data.get("nome"),
+                    codigo_cartao=parceiro_data.get("codigo_cartao"),
+                )
 
-        # 3. Create solicitation document
-        solicitacao_id = await self.solicitacao_repo.create(data_to_save, id_prefix="SOL")
-        logger.info(f"Successfully created solicitation document with ID: {solicitacao_id}")
+            # Ensure 'vidas' and 'cobertura' have default values if missing in DB
+            # This is a safeguard, but the repo query should fetch them.
+            solicitacao_dict.setdefault("vidas", [])
+            solicitacao_dict.setdefault("cobertura", "nacional") # Or some other sensible default
 
-        # 4. Update protocol with the final generated ID
-        protocolo = f"SOL-{solicitacao_id.split('_')[-1].upper()}"
-        await self.solicitacao_repo.update(solicitacao_id, {"protocolo": protocolo})
+            list_item = SolicitacaoListItem(
+                **solicitacao_dict,
+                parceiro=parceiro_info,
+            )
+            result_list.append(list_item.model_dump())
+
+        return result_list
+
+    async def create_solicitacao(self, data: SolicitacaoCreate) -> str:
+        """Creates a new solicitation and returns its protocol."""
+        logger.info(f"Attempting to create solicitation for partner {data.parceiro_id}")
+
+        # 1. Validate partner existence
+        await self.parceiro_repo.get_or_raise(data.parceiro_id)
+
+        # 2. Generate protocol
+        # This is a simplified version. A robust implementation might use a counter.
+        timestamp = datetime.now(timezone.utc)
+        protocolo = f"SOL-{timestamp.strftime('%Y%m%d%H%M%S')}"
+
+        # 3. Prepare data for DB
+        solicitacao_db_data = SolicitacaoInDB(
+            **data.model_dump(),
+            id="",  # Firestore will generate it
+            protocolo=protocolo,
+            tipo_contratacao=data.tipo_contratacao,
+            created_at=timestamp,
+            updated_at=timestamp,
+        )
+
+        # 4. Create document in Firestore
+        doc_ref = await self.solicitacao_repo.create(solicitacao_db_data.model_dump(exclude={"id"}))
+        logger.info(f"Successfully created solicitation with ID {doc_ref.id} and protocol {protocolo}")
 
         return protocolo
 
-    async def update_dados_comerciais(
-        self, solicitacao_id: str, dados_update: DadosComerciaisSchema
-    ) -> Dict[str, Any]:
+    async def update_dados_comerciais(self, solicitacao_id: str, dados_update: DadosComerciaisSchema) -> Dict[str, Any]:
         """
-        Partially updates the commercial data of a solicitation.
-
-        Args:
-            solicitacao_id: The ID of the solicitation to update.
-            dados_update: The commercial data fields to update.
-
-        Returns:
-            The full updated solicitation document.
-
-        Raises:
-            NotFoundException: If the solicitation is not found.
+        Updates the commercial data for a given solicitation.
         """
-        logger.info(f"Updating commercial data for solicitation {solicitacao_id}")
+        logger.info(f"Updating commercial data for solicitation ID: {solicitacao_id}")
 
-        # Ensure solicitation exists
-        solicitacao = await self.solicitacao_repo.get_or_raise(solicitacao_id)
+        # Get existing solicitation data to ensure it exists
+        await self.solicitacao_repo.get_or_raise(solicitacao_id)
 
-        # Get current data and merge with the update
-        current_dados = solicitacao.get("dados_comerciais") or {}
-        update_payload = dados_update.model_dump(exclude_unset=True)
-        current_dados.update(update_payload)
-
-        # Prepare data for Firestore update
+        # Prepare update data for the repository
+        # Use model_dump to convert Pydantic model to dictionary
         update_data = {
-            "dados_comerciais": current_dados,
-            "updated_at": datetime.utcnow(),
+            "dados_comerciais": dados_update.model_dump()
         }
 
-        await self.solicitacao_repo.update(solicitacao_id, update_data)
-        logger.info(f"Successfully updated commercial data for solicitation {solicitacao_id}")
+        # Update the solicitation in the database
+        updated_solicitacao = await self.solicitacao_repo.update(solicitacao_id, update_data)
+        
+        return updated_solicitacao
 
-        # Return the updated document
-        return await self.solicitacao_repo.get_or_raise(solicitacao_id)
-
-    async def get_solicitacao_historico(self, solicitacao_id: str) -> List[Dict[str, Any]]:
+    async def get_solicitacao_historico(self, solicitacao_id: str) -> List[HistoricoStatusSchema]:
         """
-        Retrieves the status history of a solicitation.
-
-        Args:
-            solicitacao_id: The ID of the solicitation.
-
-        Returns:
-            A list of status history events.
-
-        Raises:
-            NotFoundException: If the solicitation is not found.
+        Retrieves the historical status changes for a given solicitation.
         """
-        logger.info(f"Retrieving history for solicitation {solicitacao_id}")
-        solicitacao = await self.solicitacao_repo.get_or_raise(solicitacao_id)
-        return solicitacao.get("historico_status") or []
+        logger.info(f"Fetching history for solicitation ID: {solicitacao_id}")
+        
+        # Get the full solicitation data
+        solicitacao_data = await self.solicitacao_repo.get_or_raise(solicitacao_id)
+        
+        # Extract historico_status, default to an empty list if not present
+        historico_raw = solicitacao_data.get("historico_status", [])
+        
+        # Convert raw history dictionaries to HistoricoStatusSchema objects
+        historico = [HistoricoStatusSchema(**item) for item in historico_raw]
+        
+        return historico

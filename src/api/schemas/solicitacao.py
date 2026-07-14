@@ -8,6 +8,9 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field, conint, constr
 
+from src.api.schemas.parceiro import ParceiroResumoSolicitacao
+
+
 
 class OperadoraPermitida(str, Enum):
     """Allowed health insurance operators."""
@@ -126,6 +129,20 @@ class StatusUpdateSchema(BaseModel):
     status: StatusSolicitacao = Field(..., description="O novo status para a solicitação.")
 
 
+
+
+class SolicitacaoListItem(BaseModel):
+    id: str
+    protocolo: str
+    status: StatusSolicitacao
+    cidade: Optional[str]
+    uf: Optional[str]
+    vidas: List[VidaInput]
+    cobertura: Cobertura
+    parceiro: Optional[ParceiroResumoSolicitacao]
+    created_at: datetime
+    
 class SolicitacaoListResponse(BaseModel):
     """Schema for the API response for a list of Solicitações."""
-    solicitacoes: List[SolicitacaoOut]
+    #solicitacoes: List[SolicitacaoOut]
+    solicitacoes: List[SolicitacaoListItem]

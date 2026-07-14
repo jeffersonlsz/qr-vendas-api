@@ -363,7 +363,7 @@ class VendaService(BaseService):
         Raises:
             NotFoundException: If solicitation doesn't exist
         """
-        from src.db.repositories import SolicitacaoRepository
+        from src.db.repositories.solicitacao_repository import SolicitacaoRepository
 
         solicitacao_repo = SolicitacaoRepository(self.db)
         return await solicitacao_repo.get_or_raise(solicitacao_id)
@@ -394,7 +394,7 @@ class VendaService(BaseService):
             solicitacao_id: Solicitation ID
             status: New status
         """
-        from src.db.repositories import SolicitacaoRepository
+        from src.db.repositories.solicitacao_repository import SolicitacaoRepository
 
         solicitacao_repo = SolicitacaoRepository(self.db)
         await solicitacao_repo.update(solicitacao_id, {"status": status.value, "updated_at": get_server_timestamp()})

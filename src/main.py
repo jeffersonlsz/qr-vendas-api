@@ -136,13 +136,23 @@ def register_exception_handlers(app: FastAPI) -> None:
     ):
         """Handle request validation errors."""
         logger.warning(f"Validation error: {exc.errors()}")
+
+        # Convert errors to a serializable format
+        serializable_errors = []
+        for error in exc.errors():
+            new_error = error.copy()
+            if 'ctx' in new_error and 'error' in new_error['ctx']:
+                # Convert the error object to its string representation
+                new_error['ctx']['error'] = str(new_error['ctx']['error'])
+            serializable_errors.append(new_error)
+
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content={
                 "success": False,
                 "message": "Validation error",
                 "error_code": "RequestValidationError",
-                "detail": exc.errors(),
+                "detail": serializable_errors,
             },
         )
 

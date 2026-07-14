@@ -1,3 +1,4 @@
+# src/db/repositories/base_repository.py
 """
 Base repository for Firestore operations.
 Provides common CRUD operations for all repositories.
@@ -8,7 +9,6 @@ from typing import Any, Dict, Generic, List, Optional, Tuple, TypeVar
 
 from google.cloud import firestore
 from google.cloud.firestore_v1.base_document import DocumentSnapshot
-from google.cloud.firestore_v1.base_query import FieldFilter
 
 from src.core.exceptions import NotFoundException
 from src.db.connection import get_server_timestamp
@@ -69,6 +69,25 @@ class BaseRepository(Generic[T]):
         
         return self._serialize_doc(doc)
 
+    async def update(self, doc_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Updates a document by its ID.
+        """
+        # Ensure the document exists before updating
+        await self.get_or_raise(doc_id)
+
+        update_data = data.copy()
+        update_data["updated_at"] = get_server_timestamp()
+
+        doc_ref = self.collection.document(doc_id)
+        await asyncio.to_thread(doc_ref.update, update_data)
+
+        self.logger.info(f"Updated document {doc_id} in {self.collection.id}")
+        
+        # Re-fetch the document to get the updated version with server timestamp
+        updated_doc = await self.get_or_raise(doc_id)
+        return updated_doc
+
     async def list(
         self,
         filters: Optional[List[Tuple[str, str, Any]]] = None,
@@ -99,59 +118,22 @@ class BaseRepository(Generic[T]):
         docs = await asyncio.to_thread(list, query.stream())
         return [self._serialize_doc(doc) for doc in docs]
 
-    async def count(self, filters: Optional[List[Tuple[str, str, Any]]] = None) -> int:
+    async def count(
+        self,
+        filters: Optional[List[Tuple[str, str, Any]]] = None,
+    ) -> int:
         """
-        Count documents with optional filtering.
+        Counts documents with optional filtering.
         """
         query = self.collection
+
         if filters:
             for field, op, value in filters:
                 query = query.where(field, op, value)
-        
-        # Inefficient, but works without aggregation queries.
-        # For high-performance counting, a separate counter or aggregation is needed.
-        docs = await asyncio.to_thread(list, query.stream())
-        return len(docs)
 
-
-class VendaRepository(BaseRepository):
-    def __init__(self, db: firestore.Client):
-        super().__init__(db, "vendas")
-
-class SolicitacaoRepository(BaseRepository):
-    def __init__(self, db: firestore.Client):
-        super().__init__(db, "solicitacoes")
-        
-    async def find_by_parceiro_id(self, parceiro_id: str) -> List[Dict[str, Any]]:
-        """
-        Find solicitations by parceiro_id.
-        """
-        return await self.list(filters=[("parceiro_id", "==", parceiro_id)])
-
-class ParceiroRepository(BaseRepository):
-    """
-    Repository for 'parceiros' collection.
-    """
-
-    def __init__(self, db: firestore.Client):
-        super().__init__(db, "parceiros")
-
-    async def get_next_sequencial(self) -> int:
-        """
-        Get the next sequential number for a new partner.
-        """
-        query = self.collection.order_by("numero_sequencial", direction=firestore.Query.DESCENDING).limit(1)
-        docs = await asyncio.to_thread(query.get)
-        
-        if docs:
-            last_sequencial = docs[0].to_dict().get("numero_sequencial", 0)
-            return (last_sequencial or 0) + 1
-        return 1
-
-class OperadorRepository(BaseRepository):
-    """
-    Repository for the 'operadores' (operators) collection.
-    """
-
-    def __init__(self, db: firestore.Client):
-        super().__init__(db, "operadores")
+        # Use Firestore's count aggregation
+        aggregate_query = query.count()
+        result = await asyncio.to_thread(aggregate_query.get)
+        # The result is a list of AggregateResult, we need the first one
+        # and then its value property
+        return result[0][0].value

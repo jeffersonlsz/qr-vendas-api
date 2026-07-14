@@ -1,3 +1,4 @@
+# src\api\schemas\parceiro.py
 """
 Pydantic schemas for Parceiro (Partner) model.
 """
@@ -177,6 +178,7 @@ class ParceiroResumo(BaseModel):
     parceiro_id: str
     nome: str
     total_solicitacoes: int = 0
+    total_convertidos: int = 0
     total_vendas: int = 0
     total_comissao: float = 0.0
     valor_total_vendas: float = 0.0
@@ -208,3 +210,9 @@ class ParceiroLoteCreateResponse(BaseModel):
     quantidade_criada: int
     primeiro_nome: str
     ultimo_nome: str
+
+
+class ParceiroResumoSolicitacao(BaseModel):
+    id: str
+    nome: str
+    codigo_cartao: Optional[str] = None

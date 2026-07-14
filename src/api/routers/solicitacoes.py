@@ -40,7 +40,7 @@ async def get_all_solicitacoes_endpoint(db: BaseClient = Depends(get_db)):
     """
     try:
         service = SolicitacaoService(db)
-        solicitacoes_list = await service.get_all_solicitacoes()
+        solicitacoes_list = await service.get_all_solicitacoes_resumo()
         return {"solicitacoes": solicitacoes_list}
     except Exception as e:
         logger.error(f"An unexpected error occurred while fetching solicitations: {e}", exc_info=True)

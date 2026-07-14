@@ -33,8 +33,13 @@ python -m uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
 ```
 ### 3. Rodar com docker
 # Build e push da imagem
-docker build -t sist-vendas-uber -f Dockerfile .  
-docker run -p 8080:8080 sist-vendas-uber 
+docker build -t qr-saude-api .
+docker run -p 8080:8080 qr-saude-api
+
+### Swagger
+http://localhost:8080/docs
+
+
 
 # Cloud Run
 # TODO verificar como fazer deploy no render e no gcloud (quando tiver o projeto)
@@ -46,7 +51,7 @@ Certifique-se de que seu arquivo `.env` aponta para o emulador durante o desenvo
 FIRESTORE_EMULATOR_HOST="localhost:8080"
 GOOGLE_CLOUD_PROJECT="demo-project"
 ```
-### 6. Deploy no Render
+### 6. Deploy no Google Cloud
 
 # 
 
