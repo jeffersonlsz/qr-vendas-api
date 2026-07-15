@@ -105,8 +105,8 @@ class SolicitacaoService:
         )
 
         # 4. Create document in Firestore
-        doc_ref = await self.solicitacao_repo.create(solicitacao_db_data.model_dump(exclude={"id"}))
-        logger.info(f"Successfully created solicitation with ID {doc_ref.id} and protocol {protocolo}")
+        doc_ref = await self.solicitacao_repo.create(solicitacao_db_data.model_dump(exclude={"id"}), id_prefix="SOL")
+        logger.info(f"Successfully created solicitation with ID {doc_ref} and protocol {protocolo}")
 
         return protocolo
 
@@ -135,14 +135,18 @@ class SolicitacaoService:
         Retrieves the historical status changes for a given solicitation.
         """
         logger.info(f"Fetching history for solicitation ID: {solicitacao_id}")
-        
+
         # Get the full solicitation data
         solicitacao_data = await self.solicitacao_repo.get_or_raise(solicitacao_id)
-        
-        # Extract historico_status, default to an empty list if not present
-        historico_raw = solicitacao_data.get("historico_status", [])
-        
+
+        # Extract historico_status
+        historico_raw = solicitacao_data.get("historico_status")
+
+        # Fallback to an empty list if historico_raw is None
+        if historico_raw is None:
+            return []
+
         # Convert raw history dictionaries to HistoricoStatusSchema objects
         historico = [HistoricoStatusSchema(**item) for item in historico_raw]
-        
+
         return historico
