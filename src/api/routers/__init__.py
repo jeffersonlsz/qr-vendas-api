@@ -5,6 +5,7 @@ from .vendas import router as vendas_router
 from .dashboard import router as dashboard_router
 from .solicitacoes import router as solicitacoes_router
 from .operadores import router as operadores_router
+from .templates import router as templates_router
 
 __all__ = [
     "parceiros_router",
@@ -12,4 +13,5 @@ __all__ = [
     "dashboard_router",
     "solicitacoes_router",
     "operadores_router",
+    "templates_router",
 ]

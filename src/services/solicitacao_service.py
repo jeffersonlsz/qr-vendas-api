@@ -3,6 +3,7 @@
 Business logic for managing Solicitações de Cotação.
 """
 import logging
+from urllib.parse import quote
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 
@@ -10,13 +11,16 @@ from google.cloud.firestore_v1.base_client import BaseClient
 
 from src.api.schemas.parceiro import ParceiroResumoSolicitacao
 from src.api.schemas.solicitacao import (
+    WhatsAppRedirectResponse,
     SolicitacaoCreate,
     SolicitacaoInDB,
     SolicitacaoListItem,
     DadosComerciaisSchema,
     HistoricoStatusSchema,
 )
-from src.core.exceptions import NotFoundException
+from src.core.config import get_settings
+from src.core.exceptions import NotFoundException, ValidationException
+from src.services.operador_service import OperadorService
 # The following import is incorrect because 'src.db.repositories' is not a package
 # due to a file conflict or incorrect structure.
 # We will correct this by importing from the new __init__.py
@@ -35,10 +39,18 @@ class SolicitacaoService:
         self.db = db
         self.solicitacao_repo = SolicitacaoRepository(db)
         self.parceiro_repo = ParceiroRepository(db)
+        self.operador_service = OperadorService(db)
+        self.settings = get_settings()
         
     async def get_solicitacao(self, solicitacao_id: str) -> Dict[str, Any]:
         """Retrieves a single solicitation by its ID."""
-        return await self.solicitacao_repo.get_or_raise(solicitacao_id)
+        solicitacao = await self.solicitacao_repo.get_or_raise(solicitacao_id)
+        # busca informações do parceiro associado
+        parceiro_id = solicitacao.get("parceiro_id")
+        if parceiro_id:
+            parceiro = await self.parceiro_repo.get_or_raise(parceiro_id)
+            solicitacao["parceiro"] = parceiro
+        return solicitacao
 
     async def get_all_solicitacoes_resumo(self) -> List[Dict[str, Any]]:
         """
@@ -109,6 +121,62 @@ class SolicitacaoService:
         logger.info(f"Successfully created solicitation with ID {doc_ref} and protocol {protocolo}")
 
         return protocolo
+
+    async def iniciar_atendimento_whatsapp(self, data: SolicitacaoCreate) -> WhatsAppRedirectResponse:
+        """
+        Creates a solicitation and generates a WhatsApp redirection URL.
+
+        This method centralizes the logic for routing a new lead to the correct
+        operator's WhatsApp number.
+        """
+        logger.info(f"Iniciando atendimento via WhatsApp para parceiro {data.parceiro_id}")
+
+        # 1. Create the solicitation as usual
+        await self.create_solicitacao(data)
+
+        # 2. Get partner details
+        parceiro = await self.parceiro_repo.get_or_raise(data.parceiro_id)
+        operador_id = parceiro.get("operador_id")
+        nome_parceiro = parceiro.get("nome")
+        codigo_cartao = parceiro.get("codigo_cartao", "N/A")
+
+        telefone_destino = None
+
+        # 3. Find the operator's phone number
+        if operador_id:
+            try:
+                operador = await self.operador_service.validate_and_get(operador_id)
+                telefone_destino = operador.get("telefone")
+                logger.info(f"Lead encaminhado para o operador '{operador.get('nome')}' (ID: {operador_id}).")
+            except (NotFoundException, ValidationException) as e:
+                logger.warning(f"Operador {operador_id} do parceiro {data.parceiro_id} não encontrado ou inativo: {e}. Usando fallback.")
+                telefone_destino = self.settings.whatsapp_fallback_number
+        else:
+            logger.warning(f"Parceiro {data.parceiro_id} não possui operador associado. Usando fallback.")
+            telefone_destino = self.settings.whatsapp_fallback_number
+
+        # 4. If no destination phone is found, raise an error
+        if not telefone_destino:
+            logger.error(f"Falha crítica: Nenhum telefone de destino (operador ou fallback) configurado para a solicitação do parceiro {data.parceiro_id}.")
+            raise ValidationException("Não foi possível determinar um vendedor para o atendimento. Contate o suporte.")
+
+        # 5. Build the WhatsApp URL
+        mensagem_template = self.settings.whatsapp_default_message
+
+        # Define a identificação do parceiro com fallback para o código do cartão
+        if nome_parceiro and nome_parceiro.strip():
+            identificacao_parceiro = f"Vim pelo parceiro {nome_parceiro.strip()}."
+        else:
+            identificacao_parceiro = f"Vim pelo parceiro de código: {codigo_cartao}."
+
+        mensagem_formatada = mensagem_template.format(identificacao_parceiro=identificacao_parceiro)
+        mensagem_encoded = quote(mensagem_formatada)
+
+        whatsapp_url = f"https://wa.me/{telefone_destino}?text={mensagem_encoded}"
+        logger.info(f"URL do WhatsApp gerada: {whatsapp_url}")
+
+        return WhatsAppRedirectResponse(whatsapp_url=whatsapp_url)
+
 
     async def update_dados_comerciais(self, solicitacao_id: str, dados_update: DadosComerciaisSchema) -> Dict[str, Any]:
         """

@@ -5,8 +5,7 @@ Schemas for Solicitação de Cotação feature.
 from datetime import datetime
 from enum import Enum
 from typing import List, Optional
-
-from pydantic import BaseModel, Field, conint, constr
+from pydantic import BaseModel, Field, conint, constr, HttpUrl
 
 from src.api.schemas.parceiro import ParceiroResumoSolicitacao
 
@@ -103,6 +102,7 @@ class SolicitacaoBase(SolicitacaoCore):
     motivo_perda: Optional[str] = Field(None, description="Justificativa para a marcação da solicitação como 'perdida'.")
     dados_comerciais: Optional[DadosComerciaisSchema] = Field(None, description="Dados comerciais preenchidos ao gerar uma proposta ou converter a venda.")
     historico_status: Optional[List[HistoricoStatusSchema]] = Field(None, description="Lista de eventos de mudança de status da solicitação.")
+    parceiro: Optional[ParceiroResumoSolicitacao] = Field(None, description="Resumo das informações do parceiro associado à solicitação.")
 
 
 class SolicitacaoInDB(SolicitacaoBase):
@@ -128,6 +128,10 @@ class StatusUpdateSchema(BaseModel):
     """Schema for updating the status of a solicitation."""
     status: StatusSolicitacao = Field(..., description="O novo status para a solicitação.")
 
+
+class WhatsAppRedirectResponse(BaseModel):
+    """Schema for the WhatsApp redirection URL response."""
+    whatsapp_url: HttpUrl = Field(..., description="A URL completa para redirecionamento ao WhatsApp.")
 
 
 

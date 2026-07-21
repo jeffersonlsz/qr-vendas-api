@@ -52,6 +52,11 @@ class Settings(BaseSettings):
     # Business Logic
     codigo_cartao_prefix: str = "CARD"
 
+    # WhatsApp Integration
+    whatsapp_default_message: str = "Olá! Gostaria de uma cotação de plano de saúde. {identificacao_parceiro}"
+    whatsapp_fallback_number: Optional[str] = None
+
+
     @property
     def is_production(self) -> bool:
         """Check if running in production environment."""

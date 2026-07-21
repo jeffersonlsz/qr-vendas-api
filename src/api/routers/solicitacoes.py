@@ -8,6 +8,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from google.cloud.firestore_v1.base_client import BaseClient
 
+from src.api.schemas.common import DataResponse
 from src.api.schemas.solicitacao import (
     DadosComerciaisSchema,
     HistoricoStatusSchema,
@@ -16,6 +17,7 @@ from src.api.schemas.solicitacao import (
     SolicitacaoOut,
     SolicitacaoResponse,
     StatusUpdateSchema,
+    WhatsAppRedirectResponse,
 )
 from src.core.exceptions import ConflictException, NotFoundException
 from src.db.connection import get_db
@@ -116,6 +118,30 @@ async def create_solicitacao_endpoint(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while processing the request.",
         )
+
+
+@router.post(
+    "/iniciar-atendimento-whatsapp",
+    response_model=DataResponse[WhatsAppRedirectResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Inicia um atendimento via WhatsApp",
+    description="Cria uma solicitação e retorna a URL do WhatsApp do vendedor responsável.",
+)
+async def iniciar_atendimento_whatsapp_endpoint(
+    solicitacao_data: SolicitacaoCreate,
+    db: BaseClient = Depends(get_db),
+):
+    """
+    Endpoint para o fluxo da Landing Page.
+
+    - Recebe os dados da solicitação.
+    - Cria a solicitação no banco.
+    - Identifica o operador do parceiro.
+    - Monta e retorna a URL do WhatsApp para redirecionamento.
+    """
+    service = SolicitacaoService(db)
+    response_data = await service.iniciar_atendimento_whatsapp(solicitacao_data)
+    return DataResponse(success=True, data=response_data)
 
 
 @router.patch(

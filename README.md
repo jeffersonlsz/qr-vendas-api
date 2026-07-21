@@ -326,10 +326,7 @@ Primeiro Deploy Manual
 
 Executar:
 
-gcloud run deploy qr-saude-api \
-  --source . \
-  --region southamerica-east1 \
-  --allow-unauthenticated
+gcloud run deploy qr-saude-api  --source .  --region southamerica-east1  --allow-unauthenticated
 URL de Produção
 https://qr-saude-api-533957625089.southamerica-east1.run.app
 Consultar Logs
